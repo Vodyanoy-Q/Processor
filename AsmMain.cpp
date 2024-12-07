@@ -2,37 +2,85 @@
 #include <stdlib.h>
 #include "Asmh.h"
 
-int main()
+int main(int argc, char * argv[])
 {
-    _FOPEN(file, "text.txt", "rb");
+    ASM assembler = {};
 
-    size_t size = GetFileSize(file);
+    AsmCtor(&assembler, argv[1], argv[2]);
 
-    char * buff = (char*)calloc(size + 1, sizeof(char));
+    ParseStr(&assembler);
 
-    fread((void*)buff, sizeof(char), size, file);
+    GetCodeInfo(&assembler);
 
-    fclose(file);
-
-    size_t str_count = GetStrSize(buff, size);
-
-    printf("%d\n", str_count);
-
-    CMD * machine_code = GetCodeInfo(buff, str_count, size);
-
-    for(size_t i = 0; i < str_count; i++)
+    for(size_t i = 0; i < assembler.str_count; i++)
     {
-        printf("str = %s\n"
+        printf("str_num = %d\n"
+               "str = %s\n"
                "len_str = %d\n"
+               "personal_ip = %d\n"
                "cmd = %d\n"
                "arg = %d\n"
-               "reg = %d\n\n", machine_code[i].str, machine_code[i].len_str, machine_code[i].cmd, machine_code[i].arg, machine_code[i].reg);
+               "reg = %d\n\n", assembler.machine_code[i].str_num, assembler.machine_code[i].str, assembler.machine_code[i].len_str, assembler.machine_code[i].personal_ip, assembler.machine_code[i].cmd, assembler.machine_code[i].arg, assembler.machine_code[i].reg);
     }
 
-    WriteInFile(machine_code, str_count);
+    //MakeOutBuff(&assembler);
 
-    free(buff);
-    free(machine_code);
+
+    printf("\n=========================================================================\n");
+
+    for (size_t i = 0; i < assembler.ip; i++)
+    {
+        printf("%5d", assembler.num_buff[i]);
+    }
+
+    printf("\n=========================================================================\n");
+
+    printf("%d\n", assembler.ip);
+
+    WriteInFile(&assembler);
+
+    printf("=========================================================================\n");
+
+    for(size_t i = 0; i < assembler.str_count; i++)
+    {
+        printf("i = %d, ptr = %d\n", i + 1, assembler.machine_code[i].str);
+
+        for(size_t j = 0; j <= assembler.machine_code[i].len_str; j++)
+        {
+            printf("%3c", *(assembler.machine_code[i].str + j));
+        }
+
+        printf("\n");
+
+        for(size_t j = 0; j <= assembler.machine_code[i].len_str; j++)
+        {
+            printf("%3d", *(assembler.machine_code[i].str + j));
+        }
+        printf("\n");
+    }
+
+    printf("=========================================================================\n");
+
+    for (int i = 0; i < assembler.lable_count; i++)
+    {
+        printf("i = %d ip = %d\n", i + 1, assembler.lables[i].ip);
+
+        for(size_t j = 0; *(assembler.lables[i].str + j) != '\0'; j++)
+        {
+            printf("%3c ", *(assembler.lables[i].str + j));
+        }
+
+        printf("\n");
+
+        for(size_t j = 0; *(assembler.lables[i].str + j) != '\0'; j++)
+        {
+            printf("%3d", *(assembler.lables[i].str + j));
+        }
+        printf("\n");
+
+    }
+
+    AsmDtor(&assembler);
 
     return 0;
 }

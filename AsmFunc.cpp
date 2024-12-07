@@ -2,204 +2,630 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include <sys\stat.h>
 #include "Asmh.h"
 
-size_t GetFileSize(FILE * file)
+// assembler
+    // str .cpp
+        // main.cpp ...
+    // inc .h
+        // asm.h    ...
+
+void AsmCtor(ASM * assembler, char * In_name, char * Out_name)
 {
-    MY_ASSERT(file);
+    MY_ASSERT(assembler);
 
-    fseek(file, 0L, SEEK_END);
+    assembler->Infile      = NULL;
+    assembler->Infile_name = In_name;
 
-    size_t symbols = ftell(file);
+    assembler->buff = NULL;
 
-    rewind(file);
+    assembler->symb_count = 0;
+    assembler->str_count  = 0;
 
-    return symbols;
+    assembler->lables  = (LABLE*)calloc(MAX_LABEL_COUNT, sizeof(LABLE));
+    MY_ASSERT(assembler->lables);
+
+    assembler->lable_count = 0;
+
+    assembler->machine_code = NULL;
+    assembler->ip = 0;
+
+    assembler->Outfile      = NULL;
+    assembler->Outfile_name = Out_name;
 }
 
-size_t GetStrSize(char * buff, size_t size)
+void AsmDtor(ASM * assembler)
 {
-    size_t str_count = 0;
+    MY_ASSERT(assembler);
 
-    for (size_t i = 0; i < size; i++)
+    assembler->Infile      = NULL;
+    assembler->Infile_name = NULL;
+
+    free(assembler->buff);
+    assembler->buff = NULL;
+
+    free(assembler->num_buff);
+    assembler->num_buff = NULL;
+
+    assembler->symb_count = 0;
+    assembler->str_count  = 0;
+
+    free(assembler->lables);
+    assembler->lables = NULL;
+
+    assembler->lable_count = 0;
+
+    free(assembler->machine_code);
+    assembler->machine_code = NULL;
+
+    assembler->ip = 0;
+
+    assembler->Outfile      = NULL;
+    assembler->Outfile_name = NULL;
+}
+
+void ParseStr(ASM * assembler)
+{
+    MY_ASSERT(assembler);
+
+    _FOPEN(assembler->Infile, assembler->Infile_name, "rb");
+
+    assembler->symb_count = GetFileSymbolsCount(assembler->Infile);
+
+    assembler->buff = (char*)calloc(assembler->symb_count + 1, sizeof(char));
+    MY_ASSERT(assembler->buff);
+
+    if (fread((void*)assembler->buff, sizeof(char), assembler->symb_count, assembler->Infile) != assembler->symb_count)
     {
-        if(buff[i] == '\r')
+        printf("ERROR READ FROM FILE\n");
+
+        exit (0);
+    }
+
+    _FCLOSE(assembler->Infile);
+
+    assembler->str_count = GetStrCount(assembler->buff);
+
+    printf("=====%d=====\n", assembler->str_count);
+
+    assembler->machine_code = (CMD*)calloc(assembler->str_count, sizeof(CMD));
+    MY_ASSERT(assembler->machine_code);
+
+    assembler->num_buff = (int*)calloc(assembler->str_count * 2, sizeof(int));
+    MY_ASSERT(assembler->num_buff);
+
+    GetCodeStr(assembler);
+}
+
+size_t GetFileSymbolsCount(FILE * file)
+{
+    struct stat st;
+
+    if (fstat(fileno(file), &st) == 0)
+    {
+        return st.st_size;
+    }
+
+    return 0;
+}
+
+int GetStrCount(char * buff)
+{
+    MY_ASSERT(buff);
+
+    int str_count = 0;
+
+    while (*buff != '\0')
+    {
+        if (*buff == '\r')
         {
-            buff[i]     = '\0';
-            buff[i + 1] = '\0';
-            i++;
+            *buff       = '\0';
+            *(buff + 1) = '\0';
+
+            buff++;
 
             str_count++;
         }
+
+        buff++;
     }
 
     return str_count;
 }
 
-CMD * GetCodeInfo(char * buff, size_t str_count, size_t size)
+int CheckLable(char * str)
 {
-    CMD * machine_code = (CMD*)calloc(str_count, sizeof(CMD));
+    int c = 0;
 
-    for (size_t i = 0, k = 1; i < str_count; i++)
+    while (*str != '\0')
     {
-        for (size_t j = k; j < size; j++)
+        if (*str == ':' && c != 0)
         {
-            if (buff[j] == '\0')
+            return 1;
+        }
+
+        c++;
+        str++;
+    }
+
+    return 0;
+}
+
+void GetCodeStr(ASM * assembler)
+{
+    MY_ASSERT(assembler);
+
+    int ip = 0;
+
+    for (size_t i = 0, j = 0; i < assembler->str_count; i++)
+    {
+        if (assembler->buff[j] == '\0')
+        {
+            assembler->machine_code[i].str_num = i + 1;
+            assembler->machine_code[i].str = assembler->buff + j;
+            assembler->machine_code[i].len_str = 0;
+
+            j += 2;
+
+            continue;
+        }
+
+        if (CheckLable(assembler->buff + j))
+        {
+            assembler->machine_code[i].str_num = i + 1;
+            assembler->machine_code[i].str = assembler->buff + j;
+            assembler->machine_code[i].len_str = strlen(assembler->buff + j) - 1;
+            assembler->machine_code[i].cmd = LABEL;
+
+            j += strlen((const char*)(assembler->buff + j)) + 2;
+
+            *(assembler->buff + j - 3) = '\0';
+
+            SpaceSkip(&assembler->machine_code[i]);
+
+            assembler->lables[assembler->lable_count].str = assembler->machine_code[i].str;
+            assembler->lables[assembler->lable_count].ip = ip;
+
+            assembler->lable_count++;
+
+            continue;
+        }
+        if (strcmp((const char *)&assembler->buff[j], "POP") == 0) ip++;
+
+        for (size_t k = j; k < assembler->symb_count; k++)
+        {
+            if (assembler->buff[k] == ' ') ip++;
+
+            if (assembler->buff[k] == '\0')
             {
-                machine_code[i].str = buff + k - 1;
+                assembler->machine_code[i].str_num = i + 1;
+                assembler->machine_code[i].str = assembler->buff + j;
+                assembler->machine_code[i].len_str = k - j;
 
-                j++;
+                k += 2;
 
-                machine_code[i].len_str = j - k;
+                j = k;
 
-                j += 2;
+                ip++;
 
-                k = j;
-
-                SpaceSkip(&machine_code[i]);
+                SpaceSkip(&assembler->machine_code[i]);
 
                 break;
             }
         }
     }
 
-    for (size_t i = 0; i < str_count; i++)
-    {
-        if(machine_code[i].len_str == 1)
-        {
-            machine_code[i + 1].str -= 1;
-        }
-        else if (strncmp((const char*)machine_code[i].str, "PUSH ", 5) == 0)
-        {
-            machine_code[i].cmd = PUSH;
+    assembler->ip = ip;
+}
 
-            if (isdigit(*(machine_code[i].str + 5)))
+/*
+value
+reg
+ram
+
+[100] - intov
+
+push [49]
+
+[ ]
+
+get_value(, 0\1)
+
+strtod
+
+get_reg(, 0\1)
+
+R_X
+*/
+
+void GetArg(ASM * assembler, int i)
+{
+    MY_ASSERT(assembler);
+
+    switch(assembler->machine_code[i].cmd)
+    {
+        case PUSH:
+        {
+            if (isdigit(*(assembler->machine_code[i].str + 5)))
             {
-                machine_code[i].arg = atoi((const char*)(machine_code[i].str + 5));
+                assembler->machine_code[i].arg = atoi((const char*)(assembler->machine_code[i].str + 5));
+                assembler->machine_code[i].cmd = PUSHN;
+            }
+            else if (*(assembler->machine_code[i].str + 5) == 'R' && *(assembler->machine_code[i].str + 7) == 'X'
+                     && *(assembler->machine_code[i].str + 8) == '\0' && *(assembler->machine_code[i].str + 6) - 'A' + 1 <= 4)
+            {
+                assembler->machine_code[i].reg = (REGISTERS)(*(assembler->machine_code[i].str + 6) - 'A' + 1);
+                assembler->machine_code[i].cmd = PUSHR;
             }
             else
             {
-                if (*(machine_code[i].str + 5) == 'R' && *(machine_code[i].str + 6) < 'D')
+                printf("ERROR PUSH ARG\n"
+                       "LINE: %d\n"
+                       "STR: %s\n", assembler->machine_code[i].str_num, assembler->machine_code[i].str);
+                exit (0);
+            }
+
+            break;
+        }
+
+        case POP:
+        {
+            if (assembler->machine_code[i].len_str == 3)
+            {
+                assembler->machine_code[i].reg = REG_DEFAULT;
+            }
+            else if (*(assembler->machine_code[i].str + 4) == 'R' && *(assembler->machine_code[i].str + 6) == 'X'
+                     && *(assembler->machine_code[i].str + 7) == '\0' && *(assembler->machine_code[i].str + 5) - 'A' + 1 <= 4)
+            {
+                assembler->machine_code[i].reg = (REGISTERS)(*(assembler->machine_code[i].str + 5) - 'A' + 1);
+            }
+            else
+            {
+                printf("ERROR POP ARG\n"
+                       "LINE: %d\n"
+                       "STR: %s\n", assembler->machine_code[i].str_num, assembler->machine_code[i].str);
+                exit (0);
+            }
+
+            break;
+        }
+        case JMP:
+        {
+            if (isdigit(*(assembler->machine_code[i].str + 4)))
+            {
+                assembler->machine_code[i].arg = atoi((const char*)(assembler->machine_code[i].str + 4));
+            }
+            else if (isalpha(*(assembler->machine_code[i].str + 4)))
+            {
+                for (int j = 0; j < assembler->lable_count; j++)
                 {
-                    machine_code[i].reg = (REGISTERS)(*(machine_code[i].str + 6) - 'A' + 1);
-                }
-                else
-                {
-                    printf("ERROR PUSH ARG\n");
-                    exit(0);
+                    if (strcmp((const char*)(assembler->machine_code[i].str + 4), (const char*)assembler->lables[j].str) == 0)
+                    {
+                        assembler->machine_code[i].arg = assembler->lables[j].ip;
+
+                        break;
+                    }
                 }
             }
+            else
+            {
+                printf("ERROR JMP ARG\n"
+                       "LINE: %d\n"
+                       "STR: %s\n", assembler->machine_code[i].str_num, assembler->machine_code[i].str);
+                exit (0);
+            }
+
+            break;
         }
-        else if (strcmp((const char*)machine_code[i].str, "ADD") == 0)
+        case JB:
         {
-            machine_code[i].cmd = ADD;
+            if (isdigit(*(assembler->machine_code[i].str + 4)))
+            {
+                assembler->machine_code[i].arg = atoi((const char*)(assembler->machine_code[i].str + 4));
+            }
+            else if (isalpha(*(assembler->machine_code[i].str + 4)))
+            {
+                for (int j = 0; j < assembler->lable_count; j++)
+                {
+                    if (strcmp((const char*)(assembler->machine_code[i].str + 4), (const char*)assembler->lables[j].str) == 0)
+                    {
+                        assembler->machine_code[i].arg = assembler->lables[j].ip;
+
+                        break;
+                    }
+                }
+            }
+            else
+            {
+                printf("ERROR JMP ARG\n"
+                       "LINE: %d\n"
+                       "STR: %s\n", assembler->machine_code[i].str_num, assembler->machine_code[i].str);
+                exit (0);
+            }
+
+            break;
         }
-        else if (strcmp((const char*)machine_code[i].str, "SUB") == 0)
+        case JA:
         {
-            machine_code[i].cmd = SUB;
+            if (isdigit(*(assembler->machine_code[i].str + 4)))
+            {
+                assembler->machine_code[i].arg = atoi((const char*)(assembler->machine_code[i].str + 4));
+            }
+            else if (isalpha(*(assembler->machine_code[i].str + 4)))
+            {
+                for (int j = 0; j < assembler->lable_count; j++)
+                {
+                    if (strcmp((const char*)(assembler->machine_code[i].str + 4), (const char*)assembler->lables[j].str) == 0)
+                    {
+                        assembler->machine_code[i].arg = assembler->lables[j].ip;
+
+                        break;
+                    }
+                }
+            }
+            else
+            {
+                printf("ERROR JMP ARG\n"
+                       "LINE: %d\n"
+                       "STR: %s\n", assembler->machine_code[i].str_num, assembler->machine_code[i].str);
+                exit (0);
+            }
+
+            break;
         }
-        else if (strcmp((const char*)machine_code[i].str, "MUL") == 0)
+        case JE:
         {
-            machine_code[i].cmd = MUL;
+            if (isdigit(*(assembler->machine_code[i].str + 4)))
+            {
+                assembler->machine_code[i].arg = atoi((const char*)(assembler->machine_code[i].str + 4));
+            }
+            else if (isalpha(*(assembler->machine_code[i].str + 4)))
+            {
+                for (int j = 0; j < assembler->lable_count; j++)
+                {
+                    if (strcmp((const char*)(assembler->machine_code[i].str + 4), (const char*)assembler->lables[j].str) == 0)
+                    {
+                        assembler->machine_code[i].arg = assembler->lables[j].ip;
+
+                        break;
+                    }
+                }
+            }
+            else
+            {
+                printf("ERROR JMP ARG\n"
+                       "LINE: %d\n"
+                       "STR: %s\n", assembler->machine_code[i].str_num, assembler->machine_code[i].str);
+                exit (0);
+            }
+
+            break;
         }
-        else if (strcmp((const char*)machine_code[i].str, "DIV") == 0)
+
+        default:
         {
-            machine_code[i].cmd = DIV;
+            break;
         }
-        else if (strcmp((const char*)machine_code[i].str, "OUT") == 0)
+    }
+}
+
+void GetCodeInfo(ASM * assembler)
+{
+    MY_ASSERT(assembler);
+
+    int ip = 0;
+
+    for (size_t i = 0; i < assembler->str_count; i++)
+    {
+        if (assembler->machine_code[i].len_str == 0)
         {
-            machine_code[i].cmd = OUT;
+            assembler->machine_code[i].personal_ip = ip;
         }
-        else if (strcmp((const char*)machine_code[i].str, "HLT") == 0)
+        else if (assembler->machine_code[i].cmd == LABEL)
         {
-            machine_code[i].cmd = HLT;
+            continue;
+        }
+        else if (strncmp((const char*)assembler->machine_code[i].str, "PUSH ", 5) == 0)
+        {
+            assembler->machine_code[i].personal_ip = ip;
+            assembler->machine_code[i].cmd = PUSH;
+
+            GetArg(assembler, i);
+
+            assembler->num_buff[ip] = assembler->machine_code[i].cmd;
+
+            if (assembler->machine_code[i].reg == 0)
+                assembler->num_buff[ip + 1] = assembler->machine_code[i].arg;
+            else
+                assembler->num_buff[ip + 1] = assembler->machine_code[i].reg;
+
+            ip += 2;
+
+        }
+        else if (strcmp((const char*)assembler->machine_code[i].str, "ADD") == 0 && assembler->machine_code[i].len_str == 3)
+        {
+            assembler->machine_code[i].personal_ip = ip;
+            assembler->machine_code[i].cmd = ADD;
+
+            assembler->num_buff[ip] = assembler->machine_code[i].cmd;
+
+            ip++;
+        }
+        else if (strcmp((const char*)assembler->machine_code[i].str, "SUB") == 0 && assembler->machine_code[i].len_str == 3)
+        {
+            assembler->machine_code[i].personal_ip = ip;
+            assembler->machine_code[i].cmd = SUB;
+
+            assembler->num_buff[ip] = assembler->machine_code[i].cmd;
+
+            ip++;
+        }
+        else if (strcmp((const char*)assembler->machine_code[i].str, "MUL") == 0 && assembler->machine_code[i].len_str == 3)
+        {
+            assembler->machine_code[i].personal_ip = ip;
+            assembler->machine_code[i].cmd = MUL;
+
+            assembler->num_buff[ip] = assembler->machine_code[i].cmd;
+
+            ip++;
+        }
+        else if (strcmp((const char*)assembler->machine_code[i].str, "DIV") == 0 && assembler->machine_code[i].len_str == 3)
+        {
+            assembler->machine_code[i].personal_ip = ip;
+            assembler->machine_code[i].cmd = DIV;
+
+            assembler->num_buff[ip] = assembler->machine_code[i].cmd;
+
+            ip++;
+        }
+        else if (strcmp((const char*)assembler->machine_code[i].str, "OUT") == 0 && assembler->machine_code[i].len_str == 3)
+        {
+            assembler->machine_code[i].personal_ip = ip;
+            assembler->machine_code[i].cmd = OUT;
+
+            assembler->num_buff[ip] = assembler->machine_code[i].cmd;
+
+            ip++;
+        }
+        else if (strcmp((const char*)assembler->machine_code[i].str, "HLT") == 0 && assembler->machine_code[i].len_str == 3)
+        {
+            assembler->machine_code[i].personal_ip = ip;
+            assembler->machine_code[i].cmd = HLT;
+
+            assembler->num_buff[ip] = assembler->machine_code[i].cmd;
+
+            ip++;
+        }
+        else if (strncmp((const char*)assembler->machine_code[i].str, "JMP ", 4) == 0)
+        {
+            assembler->machine_code[i].personal_ip = ip;
+            assembler->machine_code[i].cmd = JMP;
+
+            GetArg(assembler, i);
+
+            assembler->num_buff[ip] = assembler->machine_code[i].cmd;
+            assembler->num_buff[ip + 1] = assembler->machine_code[i].arg;
+
+            ip += 2;
+        }
+        else if (strncmp((const char*)assembler->machine_code[i].str, "JA ", 3) == 0)
+        {
+            assembler->machine_code[i].personal_ip = ip;
+            assembler->machine_code[i].cmd = JA;
+
+            GetArg(assembler, i);
+
+            assembler->num_buff[ip] = assembler->machine_code[i].cmd;
+            assembler->num_buff[ip + 1] = assembler->machine_code[i].arg;
+
+            ip += 2;
+        }
+        else if (strncmp((const char*)assembler->machine_code[i].str, "JB ", 3) == 0)
+        {
+            assembler->machine_code[i].personal_ip = ip;
+            assembler->machine_code[i].cmd = JB;
+
+            GetArg(assembler, i);
+
+            assembler->num_buff[ip] = assembler->machine_code[i].cmd;
+            assembler->num_buff[ip + 1] = assembler->machine_code[i].arg;
+
+            ip += 2;
+        }
+        else if (strncmp((const char*)assembler->machine_code[i].str, "JE ", 3) == 0)
+        {
+            assembler->machine_code[i].personal_ip = ip;
+            assembler->machine_code[i].cmd = JE;
+
+            GetArg(assembler, i);
+
+            assembler->num_buff[ip] = assembler->machine_code[i].cmd;
+            assembler->num_buff[ip + 1] = assembler->machine_code[i].arg;
+
+            ip += 2;
+        }
+        else if (strcmp((const char*)assembler->machine_code[i].str, "IN") == 0 && assembler->machine_code[i].len_str == 2)
+        {
+            assembler->machine_code[i].personal_ip = ip;
+            assembler->machine_code[i].cmd = IN;
+
+            assembler->num_buff[ip] = assembler->machine_code[i].cmd;
+
+            ip++;
+        }
+        else if (strncmp((const char*)assembler->machine_code[i].str, "POP", 3) == 0 && (*(assembler->machine_code[i].str + 3) == '\0' || *(assembler->machine_code[i].str + 3) == ' '))
+        {
+            assembler->machine_code[i].personal_ip = ip;
+            assembler->machine_code[i].cmd = POP;
+
+            GetArg(assembler, i);
+
+            assembler->num_buff[ip] = assembler->machine_code[i].cmd;
+            assembler->num_buff[ip + 1] = assembler->machine_code[i].reg;
+
+            ip += 2;
+
+        }
+        else if (strcmp((const char*)assembler->machine_code[i].str, "SQRT") == 0 && assembler->machine_code[i].len_str == 4)
+        {
+            assembler->machine_code[i].personal_ip = ip;
+            assembler->machine_code[i].cmd = SQRT;
+
+            assembler->num_buff[ip] = assembler->machine_code[i].cmd;
+
+            ip++;
+        }
+        else if (strncmp((const char*)assembler->machine_code[i].str, "CALL ", 5) == 0)
+        {
+            assembler->machine_code[i].personal_ip = ip;
+            assembler->machine_code[i].cmd = CALL;
+
+            GetArg(assembler, i);
+
+            assembler->num_buff[ip] = assembler->machine_code[i].cmd;
+            assembler->num_buff[ip + 1] = assembler->machine_code[i].arg;
+
+            ip += 2;
+        }
+        else if (strcmp((const char*)assembler->machine_code[i].str, "RET") == 0 && assembler->machine_code[i].len_str == 3)
+        {
+            assembler->machine_code[i].personal_ip = ip;
+            assembler->machine_code[i].cmd = RET;
+
+            assembler->num_buff[ip] = assembler->machine_code[i].cmd;
+
+            ip++;
+        }
+        else
+        {
+            printf("UNKNOWN COMMAND\n"
+                   "LINE: %d\n"
+                   "STR: %s\n", assembler->machine_code[i].str_num, assembler->machine_code[i].str);
+
+            exit (COMMAND_ERROR);
         }
     }
 
-    return machine_code;
+    assembler->ip = ip;
 }
 
 void SpaceSkip(CMD * code)
 {
-    while(*(code->str) == ' ')
+    MY_ASSERT(code);
+
+    while (!isalpha(*(code->str)))
     {
-        code->str = code->str + 1;
-        code->len_str = code->len_str - 1;
+        code->str++;
+        code->len_str--;
     }
 }
 
-void WriteInFile(CMD * machine_code, size_t str_count)
+void WriteInFile(ASM * assembler)
 {
-    _FOPEN(file, "code.asm", "w+")
+    _FOPEN(assembler->Outfile, assembler->Outfile_name, "wb");
 
-    for (size_t i = 0; i < str_count; i++)
-    {
-        switch (machine_code[i].cmd)
-        {
-            case PUSH:
-            {
-                fprintf(file, "%d ", PUSH);
+    printf("%d %d\n", fwrite(assembler->num_buff, sizeof(int), assembler->ip, assembler->Outfile), assembler->ip);
 
-                if (machine_code[i].reg == 0)
-                {
-                    fprintf(file, "%d ", NUM);
-                    fprintf(file, "%d ", machine_code[i].arg);
-                }
-                else
-                {
-                    fprintf(file, "%d ", REG);
-                    fprintf(file, "%d ", machine_code[i].reg);
-                }
-
-                break;
-            }
-            case ADD:
-            {
-                fprintf(file, "%d ", ADD);
-                break;
-            }
-            case SUB:
-            {
-                fprintf(file, "%d ", SUB);
-                break;
-            }
-            case MUL:
-            {
-                fprintf(file, "%d ", MUL);
-                break;
-            }
-            case DIV:
-            {
-                fprintf(file, "%d ", DIV);
-                break;
-            }
-            case OUT:
-            {
-                fprintf(file, "%d ", OUT);
-                break;
-            }
-            case HLT:
-            {
-                fprintf(file, "%d ", HLT);
-                break;
-            }
-            case CMD_DEFAULT:
-            {
-                break;
-            }
-
-            default:
-            {
-                printf("ERROR COMMAND\n");
-
-                exit (COMMAND_ERROR);
-            }
-        }
-    }
-
-    fclose(file);
+    _FCLOSE(assembler->Outfile);
 }
-
-
-
-
