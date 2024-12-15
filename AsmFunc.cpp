@@ -160,12 +160,12 @@ void GetCodeStr(ASM * assembler)
 
     for (size_t i = 0, j = 0; i < assembler->str_count; i++)
     {
+        assembler->machine_code[i].personal_ip = ip;
+        assembler->machine_code[i].str_num = i + 1;
+        assembler->machine_code[i].str = assembler->buff + j;
+
         if (assembler->buff[j] == '\0')
         {
-            assembler->machine_code[i].str_num = i + 1;
-            assembler->machine_code[i].str = assembler->buff + j;
-            assembler->machine_code[i].len_str = 0;
-
             j += 2;
 
             continue;
@@ -173,8 +173,6 @@ void GetCodeStr(ASM * assembler)
 
         if (CheckLable(assembler->buff + j))
         {
-            assembler->machine_code[i].str_num = i + 1;
-            assembler->machine_code[i].str = assembler->buff + j;
             assembler->machine_code[i].len_str = strlen(assembler->buff + j) - 1;
             assembler->machine_code[i].cmd = LABEL;
 
@@ -191,16 +189,22 @@ void GetCodeStr(ASM * assembler)
 
             continue;
         }
-        if (strcmp((const char *)&assembler->buff[j], "POP") == 0) ip++;
+        if (strcmp((const char *)&assembler->buff[j], "POP") == 0)
+        {
+            ip++;
+            assembler->machine_code[i].cmd_len = 3;
+        }
 
         for (size_t k = j; k < assembler->symb_count; k++)
         {
-            if (assembler->buff[k] == ' ') ip++;
+            if (assembler->buff[k] == ' ')
+            {
+                assembler->machine_code[i].cmd_len = k - j;
+                ip++;
+            }
 
             if (assembler->buff[k] == '\0')
             {
-                assembler->machine_code[i].str_num = i + 1;
-                assembler->machine_code[i].str = assembler->buff + j;
                 assembler->machine_code[i].len_str = k - j;
 
                 k += 2;
@@ -219,195 +223,120 @@ void GetCodeStr(ASM * assembler)
     assembler->ip = ip;
 }
 
-/*
-value
-reg
-ram
-
-[100] - intov
-
-push [49]
-
-[ ]
-
-get_value(, 0\1)
-
-strtod
-
-get_reg(, 0\1)
-
-R_X
-*/
-
 void GetArg(ASM * assembler, int i)
 {
     MY_ASSERT(assembler);
 
-    switch(assembler->machine_code[i].cmd)
+    if (assembler->machine_code[i].cmd_len == assembler->machine_code[i].len_str)
     {
-        case PUSH:
-        {
-            if (isdigit(*(assembler->machine_code[i].str + 5)))
-            {
-                assembler->machine_code[i].arg = atoi((const char*)(assembler->machine_code[i].str + 5));
-                assembler->machine_code[i].cmd = PUSHN;
-            }
-            else if (*(assembler->machine_code[i].str + 5) == 'R' && *(assembler->machine_code[i].str + 7) == 'X'
-                     && *(assembler->machine_code[i].str + 8) == '\0' && *(assembler->machine_code[i].str + 6) - 'A' + 1 <= 4)
-            {
-                assembler->machine_code[i].reg = (REGISTERS)(*(assembler->machine_code[i].str + 6) - 'A' + 1);
-                assembler->machine_code[i].cmd = PUSHR;
-            }
-            else
-            {
-                printf("ERROR PUSH ARG\n"
-                       "LINE: %d\n"
-                       "STR: %s\n", assembler->machine_code[i].str_num, assembler->machine_code[i].str);
-                exit (0);
-            }
+        assembler->machine_code[i].reg  = REG_DEFAULT;
+        assembler->machine_code[i].cmd |= (1 << 5);
+        return;
+    }
 
-            break;
-        }
+    int ram_status = 0;
 
-        case POP:
+    if (*(assembler->machine_code[i].str + assembler->machine_code[i].cmd_len + 1) == '[')
+    {
+        if (assembler->machine_code[i].str[assembler->machine_code[i].len_str - 1] == ']' && assembler->machine_code[i].str[assembler->machine_code[i].len_str] == '\0')
         {
-            if (assembler->machine_code[i].len_str == 3)
+            ram_status = 1;
+            if (GetValue(&assembler->machine_code[i], ram_status))
             {
-                assembler->machine_code[i].reg = REG_DEFAULT;
-            }
-            else if (*(assembler->machine_code[i].str + 4) == 'R' && *(assembler->machine_code[i].str + 6) == 'X'
-                     && *(assembler->machine_code[i].str + 7) == '\0' && *(assembler->machine_code[i].str + 5) - 'A' + 1 <= 4)
-            {
-                assembler->machine_code[i].reg = (REGISTERS)(*(assembler->machine_code[i].str + 5) - 'A' + 1);
-            }
-            else
-            {
-                printf("ERROR POP ARG\n"
-                       "LINE: %d\n"
-                       "STR: %s\n", assembler->machine_code[i].str_num, assembler->machine_code[i].str);
-                exit (0);
-            }
-
-            break;
-        }
-        case JMP:
-        {
-            if (isdigit(*(assembler->machine_code[i].str + 4)))
-            {
-                assembler->machine_code[i].arg = atoi((const char*)(assembler->machine_code[i].str + 4));
-            }
-            else if (isalpha(*(assembler->machine_code[i].str + 4)))
-            {
-                for (int j = 0; j < assembler->lable_count; j++)
+                if (*assembler->machine_code[i].str == 'J')
                 {
-                    if (strcmp((const char*)(assembler->machine_code[i].str + 4), (const char*)assembler->lables[j].str) == 0)
-                    {
-                        assembler->machine_code[i].arg = assembler->lables[j].ip;
-
-                        break;
-                    }
+                    assembler->machine_code[i].arg = assembler->machine_code[assembler->machine_code[i].arg].personal_ip;
                 }
             }
+            else if (GetReg(&assembler->machine_code[i], ram_status)){}
             else
             {
-                printf("ERROR JMP ARG\n"
+                printf("ERROR RAM ARG\n"
                        "LINE: %d\n"
-                       "STR: %s\n", assembler->machine_code[i].str_num, assembler->machine_code[i].str);
-                exit (0);
+                       "STR: %s\n", i, assembler->machine_code[i].str);
+                exit (RAM_ARG_ERROR);
             }
 
-            break;
+            assembler->machine_code[i].cmd |= (1 << 7);
         }
-        case JB:
+        else
         {
-            if (isdigit(*(assembler->machine_code[i].str + 4)))
-            {
-                assembler->machine_code[i].arg = atoi((const char*)(assembler->machine_code[i].str + 4));
-            }
-            else if (isalpha(*(assembler->machine_code[i].str + 4)))
-            {
-                for (int j = 0; j < assembler->lable_count; j++)
-                {
-                    if (strcmp((const char*)(assembler->machine_code[i].str + 4), (const char*)assembler->lables[j].str) == 0)
-                    {
-                        assembler->machine_code[i].arg = assembler->lables[j].ip;
-
-                        break;
-                    }
-                }
-            }
-            else
-            {
-                printf("ERROR JMP ARG\n"
-                       "LINE: %d\n"
-                       "STR: %s\n", assembler->machine_code[i].str_num, assembler->machine_code[i].str);
-                exit (0);
-            }
-
-            break;
-        }
-        case JA:
-        {
-            if (isdigit(*(assembler->machine_code[i].str + 4)))
-            {
-                assembler->machine_code[i].arg = atoi((const char*)(assembler->machine_code[i].str + 4));
-            }
-            else if (isalpha(*(assembler->machine_code[i].str + 4)))
-            {
-                for (int j = 0; j < assembler->lable_count; j++)
-                {
-                    if (strcmp((const char*)(assembler->machine_code[i].str + 4), (const char*)assembler->lables[j].str) == 0)
-                    {
-                        assembler->machine_code[i].arg = assembler->lables[j].ip;
-
-                        break;
-                    }
-                }
-            }
-            else
-            {
-                printf("ERROR JMP ARG\n"
-                       "LINE: %d\n"
-                       "STR: %s\n", assembler->machine_code[i].str_num, assembler->machine_code[i].str);
-                exit (0);
-            }
-
-            break;
-        }
-        case JE:
-        {
-            if (isdigit(*(assembler->machine_code[i].str + 4)))
-            {
-                assembler->machine_code[i].arg = atoi((const char*)(assembler->machine_code[i].str + 4));
-            }
-            else if (isalpha(*(assembler->machine_code[i].str + 4)))
-            {
-                for (int j = 0; j < assembler->lable_count; j++)
-                {
-                    if (strcmp((const char*)(assembler->machine_code[i].str + 4), (const char*)assembler->lables[j].str) == 0)
-                    {
-                        assembler->machine_code[i].arg = assembler->lables[j].ip;
-
-                        break;
-                    }
-                }
-            }
-            else
-            {
-                printf("ERROR JMP ARG\n"
-                       "LINE: %d\n"
-                       "STR: %s\n", assembler->machine_code[i].str_num, assembler->machine_code[i].str);
-                exit (0);
-            }
-
-            break;
-        }
-
-        default:
-        {
-            break;
+            printf("ERROR RAM ARG\n"
+                   "LINE: %d\n"
+                   "STR: %s\n", i, assembler->machine_code[i].str);
+            exit (RAM_ARG_ERROR);
         }
     }
+    else if (GetValue(&assembler->machine_code[i], ram_status))
+    {
+        if (*assembler->machine_code[i].str == 'J')
+        {
+            assembler->machine_code[i].arg = assembler->machine_code[assembler->machine_code[i].arg].personal_ip;
+        }
+    }
+    else if (GetReg(&assembler->machine_code[i], ram_status)) {}
+    else if (GetLabel(assembler, i)){}
+    else
+    {
+        printf("ERROR ARG\n"
+               "LINE: %d\n"
+               "STR: %s\n", i, assembler->machine_code[i].str);
+        exit (ARG_ERROR);
+    }
+}
+
+int GetLabel(ASM * assembler, int i)
+{
+    MY_ASSERT(assembler);
+
+    for (int j = 0; j < assembler->lable_count; j++)
+    {
+        if (strcmp(assembler->lables[j].str, assembler->machine_code[i].str + assembler->machine_code[i].cmd_len + 1) == 0)
+        {
+            assembler->machine_code[i].arg = assembler->lables[j].ip;
+
+            return 1;
+        }
+    }
+    return 0;
+}
+
+int GetValue(CMD * machine_code, int ram_status)
+{
+    MY_ASSERT(machine_code);
+
+    char * check_ptr = NULL;
+
+    machine_code->arg = strtod(machine_code->str + machine_code->cmd_len + 1 + ram_status, &check_ptr);
+
+    if (*check_ptr != '\0' && *check_ptr != ']')
+    {
+        return 0;
+    }
+
+    machine_code->cmd |= (1 << 5);
+
+    return 1;
+}
+
+int GetReg(CMD * machine_code, int ram_status)
+{
+    MY_ASSERT(machine_code);
+
+    char * check_ptr = machine_code->str + machine_code->cmd_len + 1 + ram_status;
+
+    if (*(check_ptr) == 'R' && *(check_ptr + 2) == 'X' && *(check_ptr + 1) - 'A' < 4)
+    {
+        machine_code->reg  = *(check_ptr + 1) - 'A' + 1;
+        machine_code->cmd |= (1 << 6);
+
+        if (*(check_ptr + 3 + ram_status) != '\0')
+        {
+            return 0;
+        }
+        return 1;
+    }
+    return 0;
 }
 
 void GetCodeInfo(ASM * assembler)
@@ -420,7 +349,7 @@ void GetCodeInfo(ASM * assembler)
     {
         if (assembler->machine_code[i].len_str == 0)
         {
-            assembler->machine_code[i].personal_ip = ip;
+            continue;
         }
         else if (assembler->machine_code[i].cmd == LABEL)
         {
@@ -428,7 +357,6 @@ void GetCodeInfo(ASM * assembler)
         }
         else if (strncmp((const char*)assembler->machine_code[i].str, "PUSH ", 5) == 0)
         {
-            assembler->machine_code[i].personal_ip = ip;
             assembler->machine_code[i].cmd = PUSH;
 
             GetArg(assembler, i);
@@ -436,16 +364,18 @@ void GetCodeInfo(ASM * assembler)
             assembler->num_buff[ip] = assembler->machine_code[i].cmd;
 
             if (assembler->machine_code[i].reg == 0)
+            {
                 assembler->num_buff[ip + 1] = assembler->machine_code[i].arg;
+            }
             else
+            {
                 assembler->num_buff[ip + 1] = assembler->machine_code[i].reg;
+            }
 
             ip += 2;
-
         }
         else if (strcmp((const char*)assembler->machine_code[i].str, "ADD") == 0 && assembler->machine_code[i].len_str == 3)
         {
-            assembler->machine_code[i].personal_ip = ip;
             assembler->machine_code[i].cmd = ADD;
 
             assembler->num_buff[ip] = assembler->machine_code[i].cmd;
@@ -454,7 +384,6 @@ void GetCodeInfo(ASM * assembler)
         }
         else if (strcmp((const char*)assembler->machine_code[i].str, "SUB") == 0 && assembler->machine_code[i].len_str == 3)
         {
-            assembler->machine_code[i].personal_ip = ip;
             assembler->machine_code[i].cmd = SUB;
 
             assembler->num_buff[ip] = assembler->machine_code[i].cmd;
@@ -463,7 +392,6 @@ void GetCodeInfo(ASM * assembler)
         }
         else if (strcmp((const char*)assembler->machine_code[i].str, "MUL") == 0 && assembler->machine_code[i].len_str == 3)
         {
-            assembler->machine_code[i].personal_ip = ip;
             assembler->machine_code[i].cmd = MUL;
 
             assembler->num_buff[ip] = assembler->machine_code[i].cmd;
@@ -472,7 +400,6 @@ void GetCodeInfo(ASM * assembler)
         }
         else if (strcmp((const char*)assembler->machine_code[i].str, "DIV") == 0 && assembler->machine_code[i].len_str == 3)
         {
-            assembler->machine_code[i].personal_ip = ip;
             assembler->machine_code[i].cmd = DIV;
 
             assembler->num_buff[ip] = assembler->machine_code[i].cmd;
@@ -481,7 +408,6 @@ void GetCodeInfo(ASM * assembler)
         }
         else if (strcmp((const char*)assembler->machine_code[i].str, "OUT") == 0 && assembler->machine_code[i].len_str == 3)
         {
-            assembler->machine_code[i].personal_ip = ip;
             assembler->machine_code[i].cmd = OUT;
 
             assembler->num_buff[ip] = assembler->machine_code[i].cmd;
@@ -490,7 +416,6 @@ void GetCodeInfo(ASM * assembler)
         }
         else if (strcmp((const char*)assembler->machine_code[i].str, "HLT") == 0 && assembler->machine_code[i].len_str == 3)
         {
-            assembler->machine_code[i].personal_ip = ip;
             assembler->machine_code[i].cmd = HLT;
 
             assembler->num_buff[ip] = assembler->machine_code[i].cmd;
@@ -499,7 +424,6 @@ void GetCodeInfo(ASM * assembler)
         }
         else if (strncmp((const char*)assembler->machine_code[i].str, "JMP ", 4) == 0)
         {
-            assembler->machine_code[i].personal_ip = ip;
             assembler->machine_code[i].cmd = JMP;
 
             GetArg(assembler, i);
@@ -511,7 +435,6 @@ void GetCodeInfo(ASM * assembler)
         }
         else if (strncmp((const char*)assembler->machine_code[i].str, "JA ", 3) == 0)
         {
-            assembler->machine_code[i].personal_ip = ip;
             assembler->machine_code[i].cmd = JA;
 
             GetArg(assembler, i);
@@ -523,7 +446,6 @@ void GetCodeInfo(ASM * assembler)
         }
         else if (strncmp((const char*)assembler->machine_code[i].str, "JB ", 3) == 0)
         {
-            assembler->machine_code[i].personal_ip = ip;
             assembler->machine_code[i].cmd = JB;
 
             GetArg(assembler, i);
@@ -535,8 +457,40 @@ void GetCodeInfo(ASM * assembler)
         }
         else if (strncmp((const char*)assembler->machine_code[i].str, "JE ", 3) == 0)
         {
-            assembler->machine_code[i].personal_ip = ip;
             assembler->machine_code[i].cmd = JE;
+
+            GetArg(assembler, i);
+
+            assembler->num_buff[ip] = assembler->machine_code[i].cmd;
+            assembler->num_buff[ip + 1] = assembler->machine_code[i].arg;
+
+            ip += 2;
+        }
+        else if (strncmp((const char*)assembler->machine_code[i].str, "JBE ", 4) == 0)
+        {
+            assembler->machine_code[i].cmd = JBE;
+
+            GetArg(assembler, i);
+
+            assembler->num_buff[ip] = assembler->machine_code[i].cmd;
+            assembler->num_buff[ip + 1] = assembler->machine_code[i].arg;
+
+            ip += 2;
+        }
+        else if (strncmp((const char*)assembler->machine_code[i].str, "JAE ", 4) == 0)
+        {
+            assembler->machine_code[i].cmd = JAE;
+
+            GetArg(assembler, i);
+
+            assembler->num_buff[ip] = assembler->machine_code[i].cmd;
+            assembler->num_buff[ip + 1] = assembler->machine_code[i].arg;
+
+            ip += 2;
+        }
+        else if (strncmp((const char*)assembler->machine_code[i].str, "JNE ", 4) == 0)
+        {
+            assembler->machine_code[i].cmd = JNE;
 
             GetArg(assembler, i);
 
@@ -547,7 +501,6 @@ void GetCodeInfo(ASM * assembler)
         }
         else if (strcmp((const char*)assembler->machine_code[i].str, "IN") == 0 && assembler->machine_code[i].len_str == 2)
         {
-            assembler->machine_code[i].personal_ip = ip;
             assembler->machine_code[i].cmd = IN;
 
             assembler->num_buff[ip] = assembler->machine_code[i].cmd;
@@ -556,7 +509,6 @@ void GetCodeInfo(ASM * assembler)
         }
         else if (strncmp((const char*)assembler->machine_code[i].str, "POP", 3) == 0 && (*(assembler->machine_code[i].str + 3) == '\0' || *(assembler->machine_code[i].str + 3) == ' '))
         {
-            assembler->machine_code[i].personal_ip = ip;
             assembler->machine_code[i].cmd = POP;
 
             GetArg(assembler, i);
@@ -569,7 +521,6 @@ void GetCodeInfo(ASM * assembler)
         }
         else if (strcmp((const char*)assembler->machine_code[i].str, "SQRT") == 0 && assembler->machine_code[i].len_str == 4)
         {
-            assembler->machine_code[i].personal_ip = ip;
             assembler->machine_code[i].cmd = SQRT;
 
             assembler->num_buff[ip] = assembler->machine_code[i].cmd;
@@ -578,7 +529,6 @@ void GetCodeInfo(ASM * assembler)
         }
         else if (strncmp((const char*)assembler->machine_code[i].str, "CALL ", 5) == 0)
         {
-            assembler->machine_code[i].personal_ip = ip;
             assembler->machine_code[i].cmd = CALL;
 
             GetArg(assembler, i);
@@ -590,7 +540,6 @@ void GetCodeInfo(ASM * assembler)
         }
         else if (strcmp((const char*)assembler->machine_code[i].str, "RET") == 0 && assembler->machine_code[i].len_str == 3)
         {
-            assembler->machine_code[i].personal_ip = ip;
             assembler->machine_code[i].cmd = RET;
 
             assembler->num_buff[ip] = assembler->machine_code[i].cmd;

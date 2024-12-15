@@ -24,8 +24,16 @@ enum CMD_CODE
     RET  = 15,
     SQRT = 16,
     LABEL = 17,
-    PUSHN = 33,
-    PUSHR = 65
+    JAE  = 18,
+    JBE  = 19,
+    JNE  = 20
+};
+
+enum ARG
+{
+    RAM = 128,
+    REG = 64,
+    NUM = 32
 };
 
 #endif //_COMMANDS_H_

@@ -11,7 +11,10 @@ enum ERRORS
     ADDRES_ERROR     = -1,
     OPEN_FILE_ERROR  = -2,
     FILE_CLOSE_ERROR = -3,
-    COMMAND_ERROR    = -4
+    COMMAND_ERROR    = -4,
+    RAM_ARG_ERROR    = -5,
+    GET_ARG_ERROR    = -6,
+    ARG_ERROR        = -7
 };
 
 enum REGISTERS
@@ -24,10 +27,10 @@ enum REGISTERS
     RDX = 4
 };
 
-enum ARG
+enum RAM
 {
-    REG = 0,
-    NUM = 1
+    NOT_RAM = 0,
+    IS_RAM  = 1
 };
 
 struct CMD
@@ -36,11 +39,12 @@ struct CMD
 
     char * str = NULL;
     size_t len_str = 0;
+    size_t cmd_len = 0;
 
     int personal_ip = 0;
-    CMD_CODE cmd = CMD_DEFAULT;
+    unsigned char cmd = CMD_DEFAULT;
     int arg = 0;
-    REGISTERS reg = REG_DEFAULT;
+    char reg = REG_DEFAULT;
 };
 
 struct LABLE
@@ -83,6 +87,9 @@ void AsmCtor(ASM * assembler, char * In_name, char * Out_name);
 void AsmDtor(ASM * assembler);
 void SpaceSkip(CMD * code);
 void ParseStr(ASM * assembler);
+int GetValue(CMD * machine_code, int ram_status);
+int GetReg(CMD * machine_code, int ram_status);
+int GetLabel(ASM * assembler, int i);
 void WriteInFile(ASM * assembler);
 
 #endif //_ASSEMBLER_H_

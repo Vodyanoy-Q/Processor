@@ -17,10 +17,11 @@ int main(int argc, char * argv[])
         printf("str_num = %d\n"
                "str = %s\n"
                "len_str = %d\n"
+               "cmd_len = %d\n"
                "personal_ip = %d\n"
                "cmd = %d\n"
                "arg = %d\n"
-               "reg = %d\n\n", assembler.machine_code[i].str_num, assembler.machine_code[i].str, assembler.machine_code[i].len_str, assembler.machine_code[i].personal_ip, assembler.machine_code[i].cmd, assembler.machine_code[i].arg, assembler.machine_code[i].reg);
+               "reg = %d\n\n", assembler.machine_code[i].str_num, assembler.machine_code[i].str, assembler.machine_code[i].len_str, assembler.machine_code[i].cmd_len, assembler.machine_code[i].personal_ip, assembler.machine_code[i].cmd, assembler.machine_code[i].arg, assembler.machine_code[i].reg);
     }
 
     //MakeOutBuff(&assembler);
