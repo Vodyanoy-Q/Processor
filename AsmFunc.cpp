@@ -87,8 +87,6 @@ void ParseStr(ASM * assembler)
 
     assembler->str_count = GetStrCount(assembler->buff);
 
-    printf("=====%d=====\n", assembler->str_count);
-
     assembler->machine_code = (CMD*)calloc(assembler->str_count, sizeof(CMD));
     MY_ASSERT(assembler->machine_code);
 
@@ -229,7 +227,7 @@ void GetArg(ASM * assembler, int i)
 
     if (assembler->machine_code[i].cmd_len == assembler->machine_code[i].len_str)
     {
-        assembler->machine_code[i].reg  = REG_DEFAULT;
+        assembler->machine_code[i].arg  = 0;
         assembler->machine_code[i].cmd |= (1 << 5);
         return;
     }
@@ -241,20 +239,14 @@ void GetArg(ASM * assembler, int i)
         if (assembler->machine_code[i].str[assembler->machine_code[i].len_str - 1] == ']' && assembler->machine_code[i].str[assembler->machine_code[i].len_str] == '\0')
         {
             ram_status = 1;
-            if (GetValue(&assembler->machine_code[i], ram_status))
-            {
-                if (*assembler->machine_code[i].str == 'J')
-                {
-                    assembler->machine_code[i].arg = assembler->machine_code[assembler->machine_code[i].arg].personal_ip;
-                }
-            }
+            if (GetValue(&assembler->machine_code[i], ram_status)){}
             else if (GetReg(&assembler->machine_code[i], ram_status)){}
             else
             {
                 printf("ERROR RAM ARG\n"
                        "LINE: %d\n"
-                       "STR: %s\n", i, assembler->machine_code[i].str);
-                exit (RAM_ARG_ERROR);
+                       "STR: %s\n", i + 1, assembler->machine_code[i].str);
+                //exit (RAM_ARG_ERROR);
             }
 
             assembler->machine_code[i].cmd |= (1 << 7);
@@ -263,8 +255,8 @@ void GetArg(ASM * assembler, int i)
         {
             printf("ERROR RAM ARG\n"
                    "LINE: %d\n"
-                   "STR: %s\n", i, assembler->machine_code[i].str);
-            exit (RAM_ARG_ERROR);
+                   "STR: %s\n", i + 1, assembler->machine_code[i].str);
+            //exit (RAM_ARG_ERROR);
         }
     }
     else if (GetValue(&assembler->machine_code[i], ram_status))
@@ -280,8 +272,8 @@ void GetArg(ASM * assembler, int i)
     {
         printf("ERROR ARG\n"
                "LINE: %d\n"
-               "STR: %s\n", i, assembler->machine_code[i].str);
-        exit (ARG_ERROR);
+               "STR: %s\n", i + 1, assembler->machine_code[i].str);
+        //exit (ARG_ERROR);
     }
 }
 
@@ -327,7 +319,7 @@ int GetReg(CMD * machine_code, int ram_status)
 
     if (*(check_ptr) == 'R' && *(check_ptr + 2) == 'X' && *(check_ptr + 1) - 'A' < 4)
     {
-        machine_code->reg  = *(check_ptr + 1) - 'A' + 1;
+        machine_code->arg  = *(check_ptr + 1) - 'A' + 1;
         machine_code->cmd |= (1 << 6);
 
         if (*(check_ptr + 3 + ram_status) != '\0')
@@ -363,14 +355,7 @@ void GetCodeInfo(ASM * assembler)
 
             assembler->num_buff[ip] = assembler->machine_code[i].cmd;
 
-            if (assembler->machine_code[i].reg == 0)
-            {
-                assembler->num_buff[ip + 1] = assembler->machine_code[i].arg;
-            }
-            else
-            {
-                assembler->num_buff[ip + 1] = assembler->machine_code[i].reg;
-            }
+            assembler->num_buff[ip + 1] = assembler->machine_code[i].arg;
 
             ip += 2;
         }
@@ -514,7 +499,7 @@ void GetCodeInfo(ASM * assembler)
             GetArg(assembler, i);
 
             assembler->num_buff[ip] = assembler->machine_code[i].cmd;
-            assembler->num_buff[ip + 1] = assembler->machine_code[i].reg;
+            assembler->num_buff[ip + 1] = assembler->machine_code[i].arg;
 
             ip += 2;
 
@@ -546,13 +531,29 @@ void GetCodeInfo(ASM * assembler)
 
             ip++;
         }
+        else if (strcmp((const char*)assembler->machine_code[i].str, "WRAM") == 0 && assembler->machine_code[i].len_str == 4)
+        {
+            assembler->machine_code[i].cmd = WRAM;
+
+            assembler->num_buff[ip] = assembler->machine_code[i].cmd;
+
+            ip++;
+        }
+        else if (strcmp((const char*)assembler->machine_code[i].str, "FREE") == 0 && assembler->machine_code[i].len_str == 4)
+        {
+            assembler->machine_code[i].cmd = FREE;
+
+            assembler->num_buff[ip] = assembler->machine_code[i].cmd;
+
+            ip++;
+        }
         else
         {
             printf("UNKNOWN COMMAND\n"
                    "LINE: %d\n"
                    "STR: %s\n", assembler->machine_code[i].str_num, assembler->machine_code[i].str);
 
-            exit (COMMAND_ERROR);
+            //exit (COMMAND_ERROR);
         }
     }
 
@@ -574,7 +575,7 @@ void WriteInFile(ASM * assembler)
 {
     _FOPEN(assembler->Outfile, assembler->Outfile_name, "wb");
 
-    printf("%d %d\n", fwrite(assembler->num_buff, sizeof(int), assembler->ip, assembler->Outfile), assembler->ip);
+    fwrite(assembler->num_buff, sizeof(int), assembler->ip, assembler->Outfile);
 
     _FCLOSE(assembler->Outfile);
 }

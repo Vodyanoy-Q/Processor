@@ -94,9 +94,6 @@ void SPU_Dtor(SPU * spu)
     spu->recursion_stk = NULL;
 }
 
-//    CALL = 14,
-//    RET  = 15,
-
 void DoCode(SPU * spu)
 {
     MY_ASSERT(spu);
@@ -212,6 +209,16 @@ void DoCode(SPU * spu)
                 DoRET(spu);
                 break;
             }
+            case WRAM:
+            {
+                DoWRAM(spu);
+                break;
+            }
+            case FREE:
+            {
+                DoFREE(spu);
+                break;
+            }
             default:
             {
                 printf("AAAA\n");
@@ -219,7 +226,42 @@ void DoCode(SPU * spu)
             }
         }
         //ProcDump(spu);
+        //getchar();
         spu->ip++;
+    }
+}
+void DoFREE(SPU * spu)
+{
+    MY_ASSERT(spu);
+
+    for (int i = 0; i < RAM_SIZE; i++)
+    {
+        spu->ram[i] = 0;
+    }
+}
+
+void DoWRAM(SPU * spu)
+{
+    MY_ASSERT(spu);
+
+    for (int i = 0; i < RAM_SIZE; i++)
+    {
+        if (spu->ram[i] == 0)
+        {
+            printf(" ");
+        }
+        else if (spu->ram[i] == 1)
+        {
+            printf("*");
+        }
+        else if (spu->ram[i] == 2)
+        {
+            printf("\n");
+        }
+        else if (spu->ram[i] == 3)
+        {
+            return;
+        }
     }
 }
 
@@ -327,8 +369,8 @@ void DoADD(SPU * spu)
 {
     MY_ASSERT(spu);
 
-    int a = STAAAkPop(spu->stk);
-    int b = STAAAkPop(spu->stk);
+    STAAAkType a = STAAAkPop(spu->stk);
+    STAAAkType b = STAAAkPop(spu->stk);
 
     STAAAkPush(spu->stk, a + b);
 }
@@ -337,7 +379,7 @@ void DoSQRT(SPU * spu)
 {
     MY_ASSERT(spu);
 
-    int a = STAAAkPop(spu->stk);
+    STAAAkType a = STAAAkPop(spu->stk);
 
     STAAAkPush(spu->stk, sqrt(a));
 }
@@ -346,8 +388,8 @@ void DoSUB(SPU * spu)
 {
     MY_ASSERT(spu);
 
-    int a = STAAAkPop(spu->stk);
-    int b = STAAAkPop(spu->stk);
+    STAAAkType a = STAAAkPop(spu->stk);
+    STAAAkType b = STAAAkPop(spu->stk);
 
     STAAAkPush(spu->stk, b - a);
 }
@@ -356,8 +398,8 @@ void DoMUL(SPU * spu)
 {
     MY_ASSERT(spu);
 
-    int a = STAAAkPop(spu->stk);
-    int b = STAAAkPop(spu->stk);
+    STAAAkType a = STAAAkPop(spu->stk);
+    STAAAkType b = STAAAkPop(spu->stk);
 
     STAAAkPush(spu->stk, a * b);
 }
@@ -366,8 +408,8 @@ void DoDIV(SPU * spu)
 {
     MY_ASSERT(spu);
 
-    int a = STAAAkPop(spu->stk);
-    int b = STAAAkPop(spu->stk);
+    STAAAkType a = STAAAkPop(spu->stk);
+    STAAAkType b = STAAAkPop(spu->stk);
 
     STAAAkPush(spu->stk, b / a);
 }
@@ -397,96 +439,78 @@ void DoJA(SPU * spu)
 {
     MY_ASSERT(spu);
 
-    int a = STAAAkPop(spu->stk);
-    int b = STAAAkPop(spu->stk);
+    STAAAkType a = STAAAkPop(spu->stk);
+    STAAAkType b = STAAAkPop(spu->stk);
 
     if (b > a)
     {
         spu->ip = spu->code[spu->ip] - 1;
     }
-
-    STAAAkPush(spu->stk, b);
-    STAAAkPush(spu->stk, a);
 }
 
 void DoJB(SPU * spu)
 {
     MY_ASSERT(spu);
 
-    int a = STAAAkPop(spu->stk);
-    int b = STAAAkPop(spu->stk);
+    STAAAkType a = STAAAkPop(spu->stk);
+    STAAAkType b = STAAAkPop(spu->stk);
 
     if (b < a)
     {
         spu->ip = spu->code[spu->ip] - 1;
     }
-
-    STAAAkPush(spu->stk, b);
-    STAAAkPush(spu->stk, a);
 }
 
 void DoJE(SPU * spu)
 {
     MY_ASSERT(spu);
 
-    int a = STAAAkPop(spu->stk);
-    int b = STAAAkPop(spu->stk);
+    STAAAkType a = STAAAkPop(spu->stk);
+    STAAAkType b = STAAAkPop(spu->stk);
 
     if (b == a)
     {
         spu->ip = spu->code[spu->ip] - 1;
     }
-
-    STAAAkPush(spu->stk, b);
-    STAAAkPush(spu->stk, a);
 }
 
 void DoJAE(SPU * spu)
 {
     MY_ASSERT(spu);
 
-    int a = STAAAkPop(spu->stk);
-    int b = STAAAkPop(spu->stk);
+    STAAAkType a = STAAAkPop(spu->stk);
+    STAAAkType b = STAAAkPop(spu->stk);
 
     if (b >= a)
     {
         spu->ip = spu->code[spu->ip] - 1;
     }
-
-    STAAAkPush(spu->stk, b);
-    STAAAkPush(spu->stk, a);
 }
 
 void DoJBE(SPU * spu)
 {
     MY_ASSERT(spu);
 
-    int a = STAAAkPop(spu->stk);
-    int b = STAAAkPop(spu->stk);
+    STAAAkType a = STAAAkPop(spu->stk);
+    STAAAkType b = STAAAkPop(spu->stk);
 
     if (b <= a)
     {
         spu->ip = spu->code[spu->ip] - 1;
     }
-
-    STAAAkPush(spu->stk, b);
-    STAAAkPush(spu->stk, a);
 }
 
 void DoJNE(SPU * spu)
 {
     MY_ASSERT(spu);
 
-    int a = STAAAkPop(spu->stk);
-    int b = STAAAkPop(spu->stk);
+    STAAAkType a = STAAAkPop(spu->stk);
+    STAAAkType b = STAAAkPop(spu->stk);
 
     if (b != a)
     {
         spu->ip = spu->code[spu->ip] - 1;
     }
-
-    STAAAkPush(spu->stk, b);
-    STAAAkPush(spu->stk, a);
 }
 
 void DoIN(SPU * spu)
@@ -495,7 +519,7 @@ void DoIN(SPU * spu)
 
     printf("Enter:\n");
 
-    int var = 0;
+    STAAAkType var = 0;
 
     scanf("%d", &var);
 

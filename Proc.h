@@ -31,7 +31,7 @@ struct SPU
 
 enum SIZE
 {
-    RAM_SIZE = 20,
+    RAM_SIZE = 100,
 };
 
 
@@ -60,5 +60,23 @@ void DoJNE(SPU * spu);
 void DoSQRT(SPU * spu);
 void DoCALL(SPU * spu);
 void DoRET(SPU * spu);
+void DoWRAM(SPU * spu);
+void DoFREE(SPU * spu);
 
 #endif // _STAAAK_H_
+  //012345678910
+//_____*****_____
+//___**     **
+//__*         *
+//_*           *
+//_*           *
+//*             *
+//*             *
+//*             *
+//*             *
+//*             *
+// *           *
+// *           *
+//  *         *
+//   **     **
+//     *****
