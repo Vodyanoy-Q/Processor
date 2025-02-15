@@ -26,7 +26,9 @@ enum CMD_CODE
     LABEL = 17,
     JAE  = 18,
     JBE  = 19,
-    JNE  = 20
+    JNE  = 20,
+    FREE = 21,
+    WRAM = 22
 };
 
 enum ARG

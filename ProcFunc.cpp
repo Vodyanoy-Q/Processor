@@ -3,7 +3,7 @@
 #include <math.h>
 #include <sys\stat.h>
 
-#include "STAAAk.h"
+#include "Stack.h"
 #include "Proc.h"
 
 void GetCode(SPU * spu)
@@ -12,12 +12,12 @@ void GetCode(SPU * spu)
 
     _FOPEN(spu->file, spu->file_name, "rb");
 
-    spu->size = GetFileSize(spu->file) / 4;
+    spu->size = GetFileSize(spu->file) / sizeof(double);
 
-    spu->code = (int*)calloc(spu->size, sizeof(int));
+    spu->code = (double*)calloc(spu->size, sizeof(double));
     MY_ASSERT(spu->code);
 
-    if (fread(spu->code, sizeof(int), spu->size, spu->file) != spu->size)
+    if (fread(spu->code, sizeof(double), spu->size, spu->file) != spu->size)
     {
         printf("ERROR TO READ INPUT FILE\n"
                "FILE NAME: %s\n", spu->file_name);
@@ -46,25 +46,21 @@ void SPU_Ctor(SPU * spu, char * file_name)
     spu->file_name = file_name;
 
     spu->ip   = 0;
-    spu->start  = 0;
     spu->size = 0;
 
     spu->code = NULL;
 
-    spu->registers = (int*)calloc(4, sizeof(int));
+    spu->registers = (double*)calloc(4, sizeof(double));
     MY_ASSERT(spu->registers);
 
-    spu->ram = (int*)calloc(RAM_SIZE, sizeof(int));
+    spu->ram = (double*)calloc(RAM_SIZE, sizeof(double));
     MY_ASSERT(spu->ram);
 
-    spu->stk = (MySTAAAk*)calloc(1, sizeof(MySTAAAk));
+    spu->stk = StackCtor(4);;
     MY_ASSERT(spu->stk);
 
-    spu->recursion_stk = (MySTAAAk*)calloc(1, sizeof(MySTAAAk));
+    spu->recursion_stk = StackCtor(4);;
     MY_ASSERT(spu->recursion_stk);
-
-    STAAAkCtor(spu->stk, "SPU_stk", 4);
-    STAAAkCtor(spu->recursion_stk, "SPU_recursion_stk", 4);
 }
 
 void SPU_Dtor(SPU * spu)
@@ -75,11 +71,10 @@ void SPU_Dtor(SPU * spu)
     spu->file_name = NULL;
 
     spu->ip = 0;
-    spu->start = 0;
     spu->size = 0;
 
-    STAAAkDtor(spu->stk);
-    STAAAkDtor(spu->recursion_stk);
+    StackDtor(&spu->stk);
+    StackDtor(&spu->recursion_stk);
 
     free(spu->code);
     free(spu->registers);
@@ -102,7 +97,7 @@ void DoCode(SPU * spu)
     {
         //ProcDump(spu);
 
-        switch(spu->code[spu->ip] & 0x1F)
+        switch((int)(spu->code[spu->ip]) & 0x1F)
         {
             case PUSH:
             {
@@ -269,45 +264,45 @@ void DoCALL(SPU * spu)
 {
     MY_ASSERT(spu);
 
-    STAAAkPush(spu->recursion_stk, spu->ip + 1);
+    StackPush(spu->recursion_stk, spu->ip + 1);
 
-    spu->ip = spu->code[spu->ip] - 1;
+    spu->ip = (int)(spu->code[spu->ip]) - 1;
 }
 
 void DoRET(SPU * spu)
 {
     MY_ASSERT(spu);
 
-    spu->ip = STAAAkPop(spu->recursion_stk) - 1;
+    spu->ip = StackPop(spu->recursion_stk) - 1;
 }
 
 void DoPUSH (SPU * spu)
 {
     MY_ASSERT(spu);
 
-    switch (spu->code[spu->ip - 1] & 0xE0)
+    switch ((int)(spu->code[spu->ip - 1]) & 0xE0)
     {
         case NUM:
         {
-            STAAAkPush(spu->stk, spu->code[spu->ip]);
+            StackPush(spu->stk, spu->code[spu->ip]);
 
             break;
         }
         case REG:
         {
-            STAAAkPush(spu->stk, spu->registers[spu->code[spu->ip] - 1]);
+            StackPush(spu->stk, spu->registers[(int)(spu->code[spu->ip]) - 1]);
 
             break;
         }
         case RAM + NUM:
         {
-            STAAAkPush(spu->stk, spu->ram[spu->code[spu->ip]]);
+            StackPush(spu->stk, spu->ram[(int)(spu->code[spu->ip])]);
 
             break;
         }
         case RAM + REG:
         {
-            STAAAkPush(spu->stk, spu->ram[spu->registers[spu->code[spu->ip] - 1]]);
+            StackPush(spu->stk, spu->ram[(int)(spu->registers[(int)(spu->code[spu->ip]) - 1])]);
 
             break;
         }
@@ -315,7 +310,7 @@ void DoPUSH (SPU * spu)
         {
             printf("ERROR PUSH ARG\n"
                    "ip = %d\n"
-                   "code[%d] = %d", spu->ip, spu->ip, spu->code[spu->ip]);
+                   "code[%d] = %lg", spu->ip, spu->ip, spu->code[spu->ip]);
             exit(ERROR_PUSH_ARG);
         }
     }
@@ -325,33 +320,33 @@ void DoPOP (SPU * spu)
 {
     MY_ASSERT(spu);
 
-    switch (spu->code[spu->ip - 1] & 0xE0)
+    switch ((int)(spu->code[spu->ip - 1]) & 0xE0)
     {
         case NUM:
         {
-            STAAAkPop(spu->stk);
+            StackPop(spu->stk);
 
             break;
         }
         case REG:
         {
-            STAAAkType var = STAAAkPop(spu->stk);
+            StackType var = StackPop(spu->stk);
 
-            spu->registers[spu->code[spu->ip] - 1] = var;
+            spu->registers[(int)(spu->code[spu->ip]) - 1] = var;
 
             break;
         }
         case RAM + NUM:
         {
-            STAAAkType var = STAAAkPop(spu->stk);
-            spu->ram[spu->code[spu->ip]] = var;
+            StackType var = StackPop(spu->stk);
+            spu->ram[(int)(spu->code[spu->ip])] = var;
 
             break;
         }
         case RAM + REG:
         {
-            STAAAkType var = STAAAkPop(spu->stk);
-            spu->ram[spu->registers[spu->code[spu->ip] - 1]] = var;
+            StackType var = StackPop(spu->stk);
+            spu->ram[(int)(spu->registers[(int)(spu->code[spu->ip]) - 1])] = var;
 
             break;
         }
@@ -359,7 +354,7 @@ void DoPOP (SPU * spu)
         {
             printf("ERROR POP ARG\n"
                    "ip = %d\n"
-                   "code[%d] = %d", spu->ip, spu->ip, spu->code[spu->ip]);
+                   "code[%d] = %lg", spu->ip, spu->ip, spu->code[spu->ip]);
             exit(ERROR_PUSH_ARG);
         }
     }
@@ -369,56 +364,56 @@ void DoADD(SPU * spu)
 {
     MY_ASSERT(spu);
 
-    STAAAkType a = STAAAkPop(spu->stk);
-    STAAAkType b = STAAAkPop(spu->stk);
+    StackType a = StackPop(spu->stk);
+    StackType b = StackPop(spu->stk);
 
-    STAAAkPush(spu->stk, a + b);
+    StackPush(spu->stk, a + b);
 }
 
 void DoSQRT(SPU * spu)
 {
     MY_ASSERT(spu);
 
-    STAAAkType a = STAAAkPop(spu->stk);
+    StackType a = StackPop(spu->stk);
 
-    STAAAkPush(spu->stk, sqrt(a));
+    StackPush(spu->stk, sqrt(a));
 }
 
 void DoSUB(SPU * spu)
 {
     MY_ASSERT(spu);
 
-    STAAAkType a = STAAAkPop(spu->stk);
-    STAAAkType b = STAAAkPop(spu->stk);
+    StackType a = StackPop(spu->stk);
+    StackType b = StackPop(spu->stk);
 
-    STAAAkPush(spu->stk, b - a);
+    StackPush(spu->stk, b - a);
 }
 
 void DoMUL(SPU * spu)
 {
     MY_ASSERT(spu);
 
-    STAAAkType a = STAAAkPop(spu->stk);
-    STAAAkType b = STAAAkPop(spu->stk);
+    StackType a = StackPop(spu->stk);
+    StackType b = StackPop(spu->stk);
 
-    STAAAkPush(spu->stk, a * b);
+    StackPush(spu->stk, a * b);
 }
 
 void DoDIV(SPU * spu)
 {
     MY_ASSERT(spu);
 
-    STAAAkType a = STAAAkPop(spu->stk);
-    STAAAkType b = STAAAkPop(spu->stk);
+    StackType a = StackPop(spu->stk);
+    StackType b = StackPop(spu->stk);
 
-    STAAAkPush(spu->stk, b / a);
+    StackPush(spu->stk, b / a);
 }
 
 void DoOUT(SPU * spu)
 {
     MY_ASSERT(spu);
 
-    printf("%d\n", STAAAkPop(spu->stk));
+    printf("%lg\n", StackPop(spu->stk));
 }
 
 void DoHLT(SPU * spu)
@@ -432,19 +427,19 @@ void DoJMP(SPU * spu)
 {
     MY_ASSERT(spu);
 
-    spu->ip = spu->code[spu->ip] - 1;
+    spu->ip = (int)(spu->code[spu->ip]) - 1;
 }
 
 void DoJA(SPU * spu)
 {
     MY_ASSERT(spu);
 
-    STAAAkType a = STAAAkPop(spu->stk);
-    STAAAkType b = STAAAkPop(spu->stk);
+    StackType a = StackPop(spu->stk);
+    StackType b = StackPop(spu->stk);
 
     if (b > a)
     {
-        spu->ip = spu->code[spu->ip] - 1;
+        spu->ip = (int)(spu->code[spu->ip]) - 1;
     }
 }
 
@@ -452,12 +447,12 @@ void DoJB(SPU * spu)
 {
     MY_ASSERT(spu);
 
-    STAAAkType a = STAAAkPop(spu->stk);
-    STAAAkType b = STAAAkPop(spu->stk);
+    StackType a = StackPop(spu->stk);
+    StackType b = StackPop(spu->stk);
 
     if (b < a)
     {
-        spu->ip = spu->code[spu->ip] - 1;
+        spu->ip = (int)(spu->code[spu->ip]) - 1;
     }
 }
 
@@ -465,12 +460,12 @@ void DoJE(SPU * spu)
 {
     MY_ASSERT(spu);
 
-    STAAAkType a = STAAAkPop(spu->stk);
-    STAAAkType b = STAAAkPop(spu->stk);
+    StackType a = StackPop(spu->stk);
+    StackType b = StackPop(spu->stk);
 
     if (b == a)
     {
-        spu->ip = spu->code[spu->ip] - 1;
+        spu->ip = (int)(spu->code[spu->ip]) - 1;
     }
 }
 
@@ -478,12 +473,12 @@ void DoJAE(SPU * spu)
 {
     MY_ASSERT(spu);
 
-    STAAAkType a = STAAAkPop(spu->stk);
-    STAAAkType b = STAAAkPop(spu->stk);
+    StackType a = StackPop(spu->stk);
+    StackType b = StackPop(spu->stk);
 
     if (b >= a)
     {
-        spu->ip = spu->code[spu->ip] - 1;
+        spu->ip = (int)(spu->code[spu->ip]) - 1;
     }
 }
 
@@ -491,12 +486,12 @@ void DoJBE(SPU * spu)
 {
     MY_ASSERT(spu);
 
-    STAAAkType a = STAAAkPop(spu->stk);
-    STAAAkType b = STAAAkPop(spu->stk);
+    StackType a = StackPop(spu->stk);
+    StackType b = StackPop(spu->stk);
 
     if (b <= a)
     {
-        spu->ip = spu->code[spu->ip] - 1;
+        spu->ip = (int)(spu->code[spu->ip]) - 1;
     }
 }
 
@@ -504,12 +499,12 @@ void DoJNE(SPU * spu)
 {
     MY_ASSERT(spu);
 
-    STAAAkType a = STAAAkPop(spu->stk);
-    STAAAkType b = STAAAkPop(spu->stk);
+    StackType a = StackPop(spu->stk);
+    StackType b = StackPop(spu->stk);
 
     if (b != a)
     {
-        spu->ip = spu->code[spu->ip] - 1;
+        spu->ip = (int)(spu->code[spu->ip]) - 1;
     }
 }
 
@@ -519,11 +514,11 @@ void DoIN(SPU * spu)
 
     printf("Enter:\n");
 
-    STAAAkType var = 0;
+    StackType var = 0;
 
-    scanf("%d", &var);
+    scanf("%lg", &var);
 
-    STAAAkPush(spu->stk, var);
+    StackPush(spu->stk, var);
 }
 
 void ProcDump(SPU * spu)
@@ -548,10 +543,10 @@ void ProcDump(SPU * spu)
     {
         if(i + spu->ip == spu->ip)
         {
-            printf("%s%5d %s",  RED, spu->code[i + spu->ip], RESET_COLOR);
+            printf("%s%5lg %s",  RED, spu->code[i + spu->ip], RESET_COLOR);
             continue;
         }
-        printf("%s%5d %s",  CYAN, spu->code[i + spu->ip], RESET_COLOR);
+        printf("%s%5lg %s",  CYAN, spu->code[i + spu->ip], RESET_COLOR);
     }
     printf("\n");
 
@@ -571,14 +566,14 @@ void ProcDump(SPU * spu)
 
     for (int i = 0; i < 4; i++)
     {
-        printf("%s%5d %s",  CYAN, spu->registers[i], RESET_COLOR);
+        printf("%s%5lg %s",  CYAN, spu->registers[i], RESET_COLOR);
     }
 
     printf("\n%sram%s:%s%s  ", BLUE, RESET_COLOR, YELLOW, RESET_COLOR);
 
     for (int i = 0; i < RAM_SIZE; i++)
     {
-        printf("%s%5d %s",  CYAN, spu->ram[i], RESET_COLOR);
+        printf("%s%5lg %s",  CYAN, spu->ram[i], RESET_COLOR);
     }
 
     printf("%s\n=======================================================================\n%s", YELLOW, RESET_COLOR);

@@ -43,7 +43,7 @@ struct CMD
 
     int personal_ip = 0;
     unsigned char cmd = CMD_DEFAULT;
-    int arg = 0;
+    double arg = 0;
     char reg = REG_DEFAULT;
 };
 
@@ -69,7 +69,7 @@ struct ASM
 
     CMD * machine_code = NULL;
     size_t ip = 0;
-    int * num_buff = NULL;
+    double * num_buff = NULL;
 
     FILE * Outfile      = NULL;
     char * Outfile_name = NULL;
@@ -85,7 +85,7 @@ void GetArg(CMD * machine_code);
 void GetCodeStr(ASM * assembler);
 void AsmCtor(ASM * assembler, char * In_name, char * Out_name);
 void AsmDtor(ASM * assembler);
-void SpaceSkip(CMD * code);
+void SpaceSkip(CMD * code, size_t * j);
 void ParseStr(ASM * assembler);
 int GetValue(CMD * machine_code, int ram_status);
 int GetReg(CMD * machine_code, int ram_status);

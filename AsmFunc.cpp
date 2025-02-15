@@ -90,7 +90,7 @@ void ParseStr(ASM * assembler)
     assembler->machine_code = (CMD*)calloc(assembler->str_count, sizeof(CMD));
     MY_ASSERT(assembler->machine_code);
 
-    assembler->num_buff = (int*)calloc(assembler->str_count * 2, sizeof(int));
+    assembler->num_buff = (double*)calloc(assembler->str_count * 2, sizeof(double));
     MY_ASSERT(assembler->num_buff);
 
     GetCodeStr(assembler);
@@ -169,6 +169,9 @@ void GetCodeStr(ASM * assembler)
             continue;
         }
 
+        SpaceSkip(&assembler->machine_code[i], &j);
+
+
         if (CheckLable(assembler->buff + j))
         {
             assembler->machine_code[i].len_str = strlen(assembler->buff + j) - 1;
@@ -177,8 +180,6 @@ void GetCodeStr(ASM * assembler)
             j += strlen((const char*)(assembler->buff + j)) + 2;
 
             *(assembler->buff + j - 3) = '\0';
-
-            SpaceSkip(&assembler->machine_code[i]);
 
             assembler->lables[assembler->lable_count].str = assembler->machine_code[i].str;
             assembler->lables[assembler->lable_count].ip = ip;
@@ -210,8 +211,6 @@ void GetCodeStr(ASM * assembler)
                 j = k;
 
                 ip++;
-
-                SpaceSkip(&assembler->machine_code[i]);
 
                 break;
             }
@@ -263,7 +262,7 @@ void GetArg(ASM * assembler, int i)
     {
         if (*assembler->machine_code[i].str == 'J')
         {
-            assembler->machine_code[i].arg = assembler->machine_code[assembler->machine_code[i].arg].personal_ip;
+            assembler->machine_code[i].arg = assembler->machine_code[(int)assembler->machine_code[i].arg].personal_ip;
         }
     }
     else if (GetReg(&assembler->machine_code[i], ram_status)) {}
@@ -560,7 +559,7 @@ void GetCodeInfo(ASM * assembler)
     assembler->ip = ip;
 }
 
-void SpaceSkip(CMD * code)
+void SpaceSkip(CMD * code, size_t * j)
 {
     MY_ASSERT(code);
 
@@ -568,6 +567,7 @@ void SpaceSkip(CMD * code)
     {
         code->str++;
         code->len_str--;
+        *j = *j + 1;
     }
 }
 
@@ -575,7 +575,7 @@ void WriteInFile(ASM * assembler)
 {
     _FOPEN(assembler->Outfile, assembler->Outfile_name, "wb");
 
-    fwrite(assembler->num_buff, sizeof(int), assembler->ip, assembler->Outfile);
+    fwrite(assembler->num_buff, sizeof(double), assembler->ip, assembler->Outfile);
 
     _FCLOSE(assembler->Outfile);
 }

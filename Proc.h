@@ -6,10 +6,6 @@
 #include "ASSERT.h"
 #include "ERRORS.h"
 
-// 2 semestr
-// xuavei + ailab vse vmeste zakrivat
-
-
 struct SPU
 {
     FILE * file = NULL;
@@ -17,16 +13,15 @@ struct SPU
 
     unsigned int ip = 0;
     int hlt_status = 0;
-    int start = 0;
 
-    int * code = NULL;
     unsigned int size = 0;
 
-    int * registers = NULL;
-    int * ram = NULL;
+    double * code = NULL;
+    double * registers = NULL;
+    double * ram = NULL;
 
-    struct MySTAAAk * recursion_stk = NULL;
-    struct MySTAAAk * stk = NULL;
+    struct Stack * recursion_stk = NULL;
+    struct Stack * stk = NULL;
 };
 
 enum SIZE
