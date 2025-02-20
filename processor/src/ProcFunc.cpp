@@ -3,8 +3,8 @@
 #include <math.h>
 #include <sys\stat.h>
 
-#include "Stack.h"
-#include "Proc.h"
+#include "../inc/Stack.h"
+#include "../inc/Proc.h"
 
 void GetCode(SPU * spu)
 {
@@ -280,6 +280,8 @@ void DoPUSH (SPU * spu)
 {
     MY_ASSERT(spu);
 
+    //
+
     switch ((int)(spu->code[spu->ip - 1]) & 0xE0)
     {
         case NUM:
@@ -534,7 +536,7 @@ void ProcDump(SPU * spu)
             printf("%s%5d %s", RED, i + spu->ip, RESET_COLOR);
             continue;
         }
-        printf("%s%5d %s", CYAN, i + spu->ip, RESET_COLOR);
+        printf(CYAN "%5d " RESET_COLOR, i + spu->ip);
     }
 
     printf("\n%scode%s%s:%s ", BLUE, RESET_COLOR, YELLOW, RESET_COLOR);

@@ -1,8 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "Stack.h"
-#include "colors.h"
+#include "../inc/Stack.h"
+#include "../inc/colors.h"
 
 void DataDump(Stack * stk)
 {

@@ -3,13 +3,7 @@
 #include <string.h>
 #include <ctype.h>
 #include <sys\stat.h>
-#include "Asmh.h"
-
-// assembler
-    // str .cpp
-        // main.cpp ...
-    // inc .h
-        // asm.h    ...
+#include "../inc/Asmh.h"
 
 void AsmCtor(ASM * assembler, char * In_name, char * Out_name)
 {
@@ -79,6 +73,7 @@ void ParseStr(ASM * assembler)
     if (fread((void*)assembler->buff, sizeof(char), assembler->symb_count, assembler->Infile) != assembler->symb_count)
     {
         printf("ERROR READ FROM FILE\n");
+        //AsmDtor(assembler);
 
         exit (0);
     }
@@ -235,7 +230,8 @@ void GetArg(ASM * assembler, int i)
 
     if (*(assembler->machine_code[i].str + assembler->machine_code[i].cmd_len + 1) == '[')
     {
-        if (assembler->machine_code[i].str[assembler->machine_code[i].len_str - 1] == ']' && assembler->machine_code[i].str[assembler->machine_code[i].len_str] == '\0')
+        if (assembler->machine_code[i].str[assembler->machine_code[i].len_str - 1] == ']' &&
+                assembler->machine_code[i].str[assembler->machine_code[i].len_str] == '\0')
         {
             ram_status = 1;
             if (GetValue(&assembler->machine_code[i], ram_status)){}
@@ -321,11 +317,7 @@ int GetReg(CMD * machine_code, int ram_status)
         machine_code->arg  = *(check_ptr + 1) - 'A' + 1;
         machine_code->cmd |= (1 << 6);
 
-        if (*(check_ptr + 3 + ram_status) != '\0')
-        {
-            return 0;
-        }
-        return 1;
+        return *(check_ptr + 3 + ram_status) == '\0';
     }
     return 0;
 }

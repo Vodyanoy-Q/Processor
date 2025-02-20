@@ -1,8 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "Proc.h"
-#include "Stack.h"
+#include "../inc/Proc.h"
+#include "../inc/Stack.h"
 
 int main(int argc, char * argv[])
 {
