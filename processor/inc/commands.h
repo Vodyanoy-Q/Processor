@@ -1,7 +1,7 @@
 #ifndef _COMMANDS_H_
 #define _COMMANDS_H_
 
-// JAE JBE JNE
+const int cmd_count = 22;
 
 enum CMD_CODE
 {
@@ -23,19 +23,21 @@ enum CMD_CODE
     CALL = 14,
     RET  = 15,
     SQRT = 16,
-    LABEL = 17,
-    JAE  = 18,
-    JBE  = 19,
-    JNE  = 20,
-    FREE = 21,
-    WRAM = 22
+    JAE  = 17,
+    JBE  = 18,
+    JNE  = 19,
+    FREE = 20,
+    WRAM = 21
 };
 
 enum ARG
 {
-    RAM = 128,
+    NUM = 32,
     REG = 64,
-    NUM = 32
+    RAM = 128,
+
+    NO_ARG = 0,
+    HAVE_ARG = 1
 };
 
 #endif //_COMMANDS_H_

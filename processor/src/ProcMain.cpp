@@ -8,11 +8,11 @@ int main(int argc, char * argv[])
 {
     struct SPU spu = {};
 
-    SPU_Ctor(&spu, argv[1]);
+    (SPU_Ctor(&spu, argv[1]));
 
-    GetCode(&spu);
+    (GetCode(&spu));
 
-    DoCode(&spu);
+    (DoCode(&spu));
 
     SPU_Dtor(&spu);
 

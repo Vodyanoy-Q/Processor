@@ -6,41 +6,48 @@
 #include "../inc/Stack.h"
 #include "../inc/Proc.h"
 
-void GetCode(SPU * spu)
+int GetCode(SPU * spu)
 {
-    MY_ASSERT(spu);
+    int error = 1;
+    MY_ASSERT(spu, SPU_ADDRESS_ERROR);
 
     _FOPEN(spu->file, spu->file_name, "rb");
 
-    spu->size = GetFileSize(spu->file) / sizeof(double);
+    spu->size = 0;
+    _CHECK_ERROR(GetFileSize(spu->file, &(spu->size)));
 
     spu->code = (double*)calloc(spu->size, sizeof(double));
-    MY_ASSERT(spu->code);
+    MY_ASSERT(spu->code, ADDRESS_ERROR);
 
     if (fread(spu->code, sizeof(double), spu->size, spu->file) != spu->size)
     {
         printf("ERROR TO READ INPUT FILE\n"
                "FILE NAME: %s\n", spu->file_name);
+
+        return ERROR_READ_FROM_FILE;
     }
 
     _FCLOSE(spu->file);
+
+    return NO_ERROR;
 }
 
-size_t GetFileSize(FILE * file)
+int GetFileSize(FILE * file, size_t * size)
 {
     struct stat st;
 
     if (fstat(fileno(file), &st) == 0)
     {
-        return st.st_size;
+        *size = st.st_size / sizeof(double);
+        return NO_ERROR;
     }
 
-    return 0;
+    return GET_SIZE_ERROR;
 }
 
-void SPU_Ctor(SPU * spu, char * file_name)
+int SPU_Ctor(SPU * spu, char * file_name)
 {
-    MY_ASSERT(spu);
+    MY_ASSERT(spu, SPU_ADDRESS_ERROR);
 
     spu->file = NULL;
     spu->file_name = file_name;
@@ -51,21 +58,25 @@ void SPU_Ctor(SPU * spu, char * file_name)
     spu->code = NULL;
 
     spu->registers = (double*)calloc(4, sizeof(double));
-    MY_ASSERT(spu->registers);
+    MY_ASSERT(spu->registers, ADDRESS_ERROR);
 
     spu->ram = (double*)calloc(RAM_SIZE, sizeof(double));
-    MY_ASSERT(spu->ram);
+    MY_ASSERT(spu->ram, ADDRESS_ERROR);
 
-    spu->stk = StackCtor(4);;
-    MY_ASSERT(spu->stk);
+    spu->stk =  NULL;
+    StackCtor(&(spu->stk), 4);
+    MY_ASSERT(spu->stk, ADDRESS_ERROR);
 
-    spu->recursion_stk = StackCtor(4);;
-    MY_ASSERT(spu->recursion_stk);
+    spu->recursion_stk = NULL;
+    StackCtor(&(spu->recursion_stk), 4);
+    MY_ASSERT(spu->recursion_stk, ADDRESS_ERROR);
+
+    return NO_ERROR;
 }
 
-void SPU_Dtor(SPU * spu)
+int SPU_Dtor(SPU * spu)
 {
-    MY_ASSERT(spu);
+    MY_ASSERT(spu, SPU_ADDRESS_ERROR);
 
     spu->file = NULL;
     spu->file_name = NULL;
@@ -87,157 +98,60 @@ void SPU_Dtor(SPU * spu)
     spu->ram = NULL;
     spu->stk = NULL;
     spu->recursion_stk = NULL;
+
+    return NO_ERROR;
 }
 
-void DoCode(SPU * spu)
+int DoCode(SPU * spu)
 {
-    MY_ASSERT(spu);
+    MY_ASSERT(spu, SPU_ADDRESS_ERROR);
 
-    for (spu->ip = 0; spu->ip < spu->size && spu->hlt_status == 0;)
+    CMD cmds[cmd_count] = {{DoPUSH, HAVE_ARG}, {DoADD,   NO_ARG}, {DoSUB,   NO_ARG}, {DoMUL,    NO_ARG}, {DoDIV,  NO_ARG},
+                           {DoOUT,    NO_ARG}, {DoHLT,   NO_ARG}, {DoJMP, HAVE_ARG}, {DoJB,   HAVE_ARG}, {DoJA, HAVE_ARG},
+                           {DoJE,   HAVE_ARG}, {DoIN,    NO_ARG}, {DoPOP, HAVE_ARG}, {DoCALL, HAVE_ARG}, {DoRET,  NO_ARG},
+                           {DoSQRT,   NO_ARG}, {DoJAE, HAVE_ARG}, {DoJBE, HAVE_ARG}, {DoJNE,  HAVE_ARG}, {DoFREE, NO_ARG},
+                           {DoWRAM,   NO_ARG} };
+    int cmd = 0;
+    int error = 0;
+
+    for (spu->ip = 0; spu->ip < spu->size && spu->hlt_status == 0; spu->ip++)
     {
-        //ProcDump(spu);
+        cmd = (int)(spu->code[spu->ip]) & 0x1F;
 
-        switch((int)(spu->code[spu->ip]) & 0x1F)
+        spu->ip += cmds[cmd - 1].get_arg;
+        error = cmds[cmd - 1].func(spu);
+
+        if (error != 0)
         {
-            case PUSH:
-            {
-                spu->ip++;
-                DoPUSH(spu);
-                break;
-            }
-            case ADD:
-            {
-                DoADD(spu);
-                break;
-            }
-            case SUB:
-            {
-                DoSUB(spu);
-                break;
-            }
-            case MUL:
-            {
-                DoMUL(spu);
-                break;
-            }
-            case DIV:
-            {
-                DoDIV(spu);
-                break;
-            }
-            case OUT:
-            {
-                DoOUT(spu);
-                break;
-            }
-            case HLT:
-            {
-                DoHLT(spu);
-                break;
-            }
-            case IN:
-            {
-                DoIN(spu);
-                break;
-            }
-            case SQRT:
-            {
-                DoSQRT(spu);
-                break;
-            }
-            case POP:
-            {
-                spu->ip++;
-                DoPOP(spu);
-                break;
-            }
-            case JMP:
-            {
-                spu->ip++;
-                DoJMP(spu);
-                break;
-            }
-            case JE:
-            {
-                spu->ip++;
-                DoJE(spu);
-                break;
-            }
-            case JA:
-            {
-                spu->ip++;
-                DoJA(spu);
-                break;
-            }
-            case JB:
-            {
-                spu->ip++;
-                DoJB(spu);
-                break;
-            }
-            case JBE:
-            {
-                spu->ip++;
-                DoJBE(spu);
-                break;
-            }
-            case JAE:
-            {
-                spu->ip++;
-                DoJAE(spu);
-                break;
-            }
-            case JNE:
-            {
-                spu->ip++;
-                DoJNE(spu);
-                break;
-            }
-            case CALL:
-            {
-                spu->ip++;
-                DoCALL(spu);
-                break;
-            }
-            case RET:
-            {
-                DoRET(spu);
-                break;
-            }
-            case WRAM:
-            {
-                DoWRAM(spu);
-                break;
-            }
-            case FREE:
-            {
-                DoFREE(spu);
-                break;
-            }
-            default:
-            {
-                printf("AAAA\n");
-                break;
-            }
+            printf(RED "ERROR: %d\n" RESET_COLOR, error);
+            printf(RED "CMD CODE: %d\n" RESET_COLOR, cmd);
+            printf(RED "IP: %d\n" RESET_COLOR, spu->ip - cmds[cmd - 1].get_arg);
+
+            ProcDump(spu);
+            SPU_Dtor(spu);
+            exit (error);
         }
         //ProcDump(spu);
         //getchar();
-        spu->ip++;
     }
+
+    return NO_ERROR;
 }
-void DoFREE(SPU * spu)
+int DoFREE(SPU * spu)
 {
-    MY_ASSERT(spu);
+    MY_ASSERT(spu, SPU_ADDRESS_ERROR);
 
     for (int i = 0; i < RAM_SIZE; i++)
     {
         spu->ram[i] = 0;
     }
+
+    return NO_ERROR;
 }
 
-void DoWRAM(SPU * spu)
+int DoWRAM(SPU * spu)
 {
-    MY_ASSERT(spu);
+    MY_ASSERT(spu, SPU_ADDRESS_ERROR);
 
     for (int i = 0; i < RAM_SIZE; i++)
     {
@@ -255,277 +169,364 @@ void DoWRAM(SPU * spu)
         }
         else if (spu->ram[i] == 3)
         {
-            return;
+            return NO_ERROR;
         }
     }
+
+    return NO_ERROR;
 }
 
-void DoCALL(SPU * spu)
+int DoCALL(SPU * spu)
 {
-    MY_ASSERT(spu);
+    MY_ASSERT(spu, SPU_ADDRESS_ERROR);
+
+    double * arg = NULL;
+    _GET_ARG;
 
     StackPush(spu->recursion_stk, spu->ip + 1);
 
-    spu->ip = (int)(spu->code[spu->ip]) - 1;
+    spu->ip = (int)(*arg) - 1;
+
+    return NO_ERROR;
 }
 
-void DoRET(SPU * spu)
+int DoRET(SPU * spu)
 {
-    MY_ASSERT(spu);
+    MY_ASSERT(spu, SPU_ADDRESS_ERROR);
 
-    spu->ip = StackPop(spu->recursion_stk) - 1;
+    StackType var = 0;
+    _STACK_POP(spu->recursion_stk, &var);
+
+    spu->ip = var - 1;
+
+    return NO_ERROR;
 }
 
-void DoPUSH (SPU * spu)
+int GetArg(SPU * spu, double ** arg)
 {
-    MY_ASSERT(spu);
-
-    //
-
     switch ((int)(spu->code[spu->ip - 1]) & 0xE0)
     {
         case NUM:
         {
-            StackPush(spu->stk, spu->code[spu->ip]);
+            *arg = &spu->code[spu->ip];
 
             break;
         }
         case REG:
         {
-            StackPush(spu->stk, spu->registers[(int)(spu->code[spu->ip]) - 1]);
+            *arg = &spu->registers[(int)(spu->code[spu->ip]) - 1];
 
             break;
         }
         case RAM + NUM:
         {
-            StackPush(spu->stk, spu->ram[(int)(spu->code[spu->ip])]);
+            *arg = &spu->ram[(int)(spu->code[spu->ip])];
 
             break;
         }
         case RAM + REG:
         {
-            StackPush(spu->stk, spu->ram[(int)(spu->registers[(int)(spu->code[spu->ip]) - 1])]);
+            *arg = &spu->ram[(int)(spu->registers[(int)(spu->code[spu->ip]) - 1])];
 
             break;
         }
         default:
         {
-            printf("ERROR PUSH ARG\n"
-                   "ip = %d\n"
-                   "code[%d] = %lg", spu->ip, spu->ip, spu->code[spu->ip]);
-            exit(ERROR_PUSH_ARG);
+            printf(RED "ERROR PUSH ARG\n" RESET_COLOR
+                   YELLOW "ip = %d\n"
+                   "code[%d] = %lg\n" RESET_COLOR, spu->ip, spu->ip, spu->code[spu->ip]);
+            return ERROR_ARG;
         }
     }
+
+    return NO_ERROR;
 }
 
-void DoPOP (SPU * spu)
+int DoPUSH (SPU * spu)
 {
-    MY_ASSERT(spu);
+    MY_ASSERT(spu, SPU_ADDRESS_ERROR);
 
-    switch ((int)(spu->code[spu->ip - 1]) & 0xE0)
+    double * arg = NULL;
+    _GET_ARG;
+
+    StackPush(spu->stk, *arg);
+
+    return NO_ERROR;
+}
+
+int DoPOP (SPU * spu)
+{
+    MY_ASSERT(spu, SPU_ADDRESS_ERROR);
+
+    if (((int)(spu->code[spu->ip - 2]) & 0xE0) == NUM)
     {
-        case NUM:
-        {
-            StackPop(spu->stk);
-
-            break;
-        }
-        case REG:
-        {
-            StackType var = StackPop(spu->stk);
-
-            spu->registers[(int)(spu->code[spu->ip]) - 1] = var;
-
-            break;
-        }
-        case RAM + NUM:
-        {
-            StackType var = StackPop(spu->stk);
-            spu->ram[(int)(spu->code[spu->ip])] = var;
-
-            break;
-        }
-        case RAM + REG:
-        {
-            StackType var = StackPop(spu->stk);
-            spu->ram[(int)(spu->registers[(int)(spu->code[spu->ip]) - 1])] = var;
-
-            break;
-        }
-        default:
-        {
-            printf("ERROR POP ARG\n"
-                   "ip = %d\n"
-                   "code[%d] = %lg", spu->ip, spu->ip, spu->code[spu->ip]);
-            exit(ERROR_PUSH_ARG);
-        }
+        return NO_ERROR;
     }
+
+    StackType var = 0;
+
+    double * arg = 0;
+    _GET_ARG;
+
+    _STACK_POP(spu->stk, &var);
+
+    *arg = var;
+
+    return NO_ERROR;
 }
 
-void DoADD(SPU * spu)
+int DoADD(SPU * spu)
 {
-    MY_ASSERT(spu);
+    MY_ASSERT(spu, SPU_ADDRESS_ERROR);
 
-    StackType a = StackPop(spu->stk);
-    StackType b = StackPop(spu->stk);
+    StackType a = 0;
+    _STACK_POP(spu->stk, &a);
+
+    StackType b = 0;
+    _STACK_POP(spu->stk, &b);
 
     StackPush(spu->stk, a + b);
+
+    return NO_ERROR;
 }
 
-void DoSQRT(SPU * spu)
+int DoSQRT(SPU * spu)
 {
-    MY_ASSERT(spu);
+    MY_ASSERT(spu, SPU_ADDRESS_ERROR);
 
-    StackType a = StackPop(spu->stk);
+    StackType a = 0;
+    _STACK_POP(spu->stk, &a);
 
     StackPush(spu->stk, sqrt(a));
+
+    return NO_ERROR;
 }
 
-void DoSUB(SPU * spu)
+int DoSUB(SPU * spu)
 {
-    MY_ASSERT(spu);
+    MY_ASSERT(spu, SPU_ADDRESS_ERROR);
 
-    StackType a = StackPop(spu->stk);
-    StackType b = StackPop(spu->stk);
+    StackType a = 0;
+    _STACK_POP(spu->stk, &a);
+
+    StackType b = 0;
+    _STACK_POP(spu->stk, &b);
 
     StackPush(spu->stk, b - a);
+
+    return NO_ERROR;
 }
 
-void DoMUL(SPU * spu)
+int DoMUL(SPU * spu)
 {
-    MY_ASSERT(spu);
+    MY_ASSERT(spu, SPU_ADDRESS_ERROR);
 
-    StackType a = StackPop(spu->stk);
-    StackType b = StackPop(spu->stk);
+    StackType a = 0;
+    _STACK_POP(spu->stk, &a);
+
+    StackType b = 0;
+    _STACK_POP(spu->stk, &b);
 
     StackPush(spu->stk, a * b);
+
+    return NO_ERROR;
 }
 
-void DoDIV(SPU * spu)
+int DoDIV(SPU * spu)
 {
-    MY_ASSERT(spu);
+    MY_ASSERT(spu, SPU_ADDRESS_ERROR);
 
-    StackType a = StackPop(spu->stk);
-    StackType b = StackPop(spu->stk);
+    StackType a = 0;
+    _STACK_POP(spu->stk, &a);
+
+    StackType b = 0;
+    _STACK_POP(spu->stk, &b);
 
     StackPush(spu->stk, b / a);
+
+    return NO_ERROR;
 }
 
-void DoOUT(SPU * spu)
+int DoOUT(SPU * spu)
 {
-    MY_ASSERT(spu);
+    MY_ASSERT(spu, SPU_ADDRESS_ERROR);
 
-    printf("%lg\n", StackPop(spu->stk));
+    StackType a = 0;
+    _STACK_POP(spu->stk, &a);
+
+    printf(YELLOW "%lg\n" RESET_COLOR, a);
+
+    return NO_ERROR;
 }
 
-void DoHLT(SPU * spu)
+int DoHLT(SPU * spu)
 {
-    MY_ASSERT(spu);
+    MY_ASSERT(spu, SPU_ADDRESS_ERROR);
 
     spu->hlt_status = 1;
+
+    return NO_ERROR;
 }
 
-void DoJMP(SPU * spu)
+int DoJMP(SPU * spu)
 {
-    MY_ASSERT(spu);
+    MY_ASSERT(spu, SPU_ADDRESS_ERROR);
 
-    spu->ip = (int)(spu->code[spu->ip]) - 1;
+    double * arg = 0;
+    _GET_ARG;
+
+    spu->ip = (int)(*arg) - 1;
+
+    return NO_ERROR;
 }
 
-void DoJA(SPU * spu)
+int DoJA(SPU * spu)
 {
-    MY_ASSERT(spu);
+    MY_ASSERT(spu, SPU_ADDRESS_ERROR);
 
-    StackType a = StackPop(spu->stk);
-    StackType b = StackPop(spu->stk);
+    double * arg = 0;
+    _GET_ARG;
+
+    StackType a = 0;
+    _STACK_POP(spu->stk, &a);
+
+    StackType b = 0;
+    _STACK_POP(spu->stk, &b);
 
     if (b > a)
     {
-        spu->ip = (int)(spu->code[spu->ip]) - 1;
+        spu->ip = (int)(*arg) - 1;
     }
+
+    return NO_ERROR;
 }
 
-void DoJB(SPU * spu)
+int DoJB(SPU * spu)
 {
-    MY_ASSERT(spu);
+    MY_ASSERT(spu, SPU_ADDRESS_ERROR);
 
-    StackType a = StackPop(spu->stk);
-    StackType b = StackPop(spu->stk);
+    double * arg = 0;
+    _GET_ARG;
+
+    StackType a = 0;
+    _STACK_POP(spu->stk, &a);
+
+    StackType b = 0;
+    _STACK_POP(spu->stk, &b);
 
     if (b < a)
     {
-        spu->ip = (int)(spu->code[spu->ip]) - 1;
+        spu->ip = (int)(*arg) - 1;
     }
+
+    return NO_ERROR;
 }
 
-void DoJE(SPU * spu)
+int DoJE(SPU * spu)
 {
-    MY_ASSERT(spu);
+    MY_ASSERT(spu, SPU_ADDRESS_ERROR);
 
-    StackType a = StackPop(spu->stk);
-    StackType b = StackPop(spu->stk);
+    double * arg = 0;
+    _GET_ARG;
+
+    StackType a = 0;
+    _STACK_POP(spu->stk, &a);
+
+    StackType b = 0;
+    _STACK_POP(spu->stk, &b);
 
     if (b == a)
     {
-        spu->ip = (int)(spu->code[spu->ip]) - 1;
+        spu->ip = (int)(*arg) - 1;
     }
+
+    return NO_ERROR;
 }
 
-void DoJAE(SPU * spu)
+int DoJAE(SPU * spu)
 {
-    MY_ASSERT(spu);
+    MY_ASSERT(spu, SPU_ADDRESS_ERROR);
 
-    StackType a = StackPop(spu->stk);
-    StackType b = StackPop(spu->stk);
+    double * arg = 0;
+    _GET_ARG;
+
+    StackType a = 0;
+    _STACK_POP(spu->stk, &a);
+
+    StackType b = 0;
+    _STACK_POP(spu->stk, &b);
 
     if (b >= a)
     {
-        spu->ip = (int)(spu->code[spu->ip]) - 1;
+        spu->ip = (int)(*arg) - 1;
     }
+
+    return NO_ERROR;
 }
 
-void DoJBE(SPU * spu)
+int DoJBE(SPU * spu)
 {
-    MY_ASSERT(spu);
+    MY_ASSERT(spu, SPU_ADDRESS_ERROR);
 
-    StackType a = StackPop(spu->stk);
-    StackType b = StackPop(spu->stk);
+    double * arg = 0;
+    _GET_ARG;
+
+    StackType a = 0;
+    _STACK_POP(spu->stk, &a);
+
+    StackType b = 0;
+    _STACK_POP(spu->stk, &b);
 
     if (b <= a)
     {
-        spu->ip = (int)(spu->code[spu->ip]) - 1;
+        spu->ip = (int)(*arg) - 1;
     }
+
+    return NO_ERROR;
 }
 
-void DoJNE(SPU * spu)
+int DoJNE(SPU * spu)
 {
-    MY_ASSERT(spu);
+    MY_ASSERT(spu, SPU_ADDRESS_ERROR);
 
-    StackType a = StackPop(spu->stk);
-    StackType b = StackPop(spu->stk);
+    double * arg = 0;
+    _GET_ARG;
+
+
+    StackType a = 0;
+    _STACK_POP(spu->stk, &a);
+
+    StackType b = 0;
+    _STACK_POP(spu->stk, &b);
 
     if (b != a)
     {
-        spu->ip = (int)(spu->code[spu->ip]) - 1;
+        spu->ip = (int)(*arg) - 1;
     }
+
+    return NO_ERROR;
 }
 
-void DoIN(SPU * spu)
+int DoIN(SPU * spu)
 {
-    MY_ASSERT(spu);
+    MY_ASSERT(spu, SPU_ADDRESS_ERROR);
 
-    printf("Enter:\n");
+    YELLOW_TEXT("Enter:\n");
 
     StackType var = 0;
 
     scanf("%lg", &var);
 
     StackPush(spu->stk, var);
+
+    return NO_ERROR;
 }
 
-void ProcDump(SPU * spu)
+int ProcDump(SPU * spu)
 {
-    printf("%s\n=======================================================================\n%s", YELLOW, RESET_COLOR);
+    MY_ASSERT(spu, SPU_ADDRESS_ERROR);
+
+    printf(YELLOW "\n=======================================================================\n" RESET_COLOR);
 
     printf("%sip%s%s:%s   ", BLUE, RESET_COLOR, YELLOW, RESET_COLOR);
 
@@ -533,7 +534,7 @@ void ProcDump(SPU * spu)
     {
         if(i + spu->ip == spu->ip)
         {
-            printf("%s%5d %s", RED, i + spu->ip, RESET_COLOR);
+            printf(RED "%5d " RESET_COLOR, i + spu->ip);
             continue;
         }
         printf(CYAN "%5d " RESET_COLOR, i + spu->ip);
@@ -545,14 +546,14 @@ void ProcDump(SPU * spu)
     {
         if(i + spu->ip == spu->ip)
         {
-            printf("%s%5lg %s",  RED, spu->code[i + spu->ip], RESET_COLOR);
+            printf(RED "%5lg " RESET_COLOR, spu->code[i + spu->ip]);
             continue;
         }
-        printf("%s%5lg %s",  CYAN, spu->code[i + spu->ip], RESET_COLOR);
+        printf(CYAN "%5lg " RESET_COLOR, spu->code[i + spu->ip]);
     }
     printf("\n");
 
-    printf("%s~~~~~~~~~~^%s", MAGN, RESET_COLOR);
+    printf(MAGN "~~~~~~~~~~^" RESET_COLOR);
 
     printf("\n%sstk%s%s:%s  ", BLUE, RESET_COLOR, YELLOW, RESET_COLOR);
 
@@ -562,24 +563,27 @@ void ProcDump(SPU * spu)
 
     DataDump(spu->recursion_stk);
 
-    printf("%s\nHLT Status: %d%s\n", BLUE, spu->hlt_status, RESET_COLOR);
+    printf(BLUE "\nHLT Status: %d\n" RESET_COLOR, spu->hlt_status);
 
     printf("%sregs%s:%s%s ", BLUE, RESET_COLOR, YELLOW, RESET_COLOR);
 
     for (int i = 0; i < 4; i++)
     {
-        printf("%s%5lg %s",  CYAN, spu->registers[i], RESET_COLOR);
+        printf(CYAN "%5lg " RESET_COLOR, spu->registers[i]);
     }
 
     printf("\n%sram%s:%s%s  ", BLUE, RESET_COLOR, YELLOW, RESET_COLOR);
 
     for (int i = 0; i < RAM_SIZE; i++)
     {
-        printf("%s%5lg %s",  CYAN, spu->ram[i], RESET_COLOR);
+        printf(CYAN "%5lg " RESET_COLOR, spu->ram[i]);
+        if (i % 10 == 9)
+        {
+            printf("\n      ");
+        }
     }
 
-    printf("%s\n=======================================================================\n%s", YELLOW, RESET_COLOR);
+    printf(YELLOW "\n=======================================================================\n" RESET_COLOR);
+
+    return NO_ERROR;
 }
-
-
-

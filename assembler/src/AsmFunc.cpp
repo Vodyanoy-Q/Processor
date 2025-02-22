@@ -73,7 +73,7 @@ void ParseStr(ASM * assembler)
     if (fread((void*)assembler->buff, sizeof(char), assembler->symb_count, assembler->Infile) != assembler->symb_count)
     {
         printf("ERROR READ FROM FILE\n");
-        //AsmDtor(assembler);
+        AsmDtor(assembler);
 
         exit (0);
     }
@@ -222,7 +222,8 @@ void GetArg(ASM * assembler, int i)
     if (assembler->machine_code[i].cmd_len == assembler->machine_code[i].len_str)
     {
         assembler->machine_code[i].arg  = 0;
-        assembler->machine_code[i].cmd |= (1 << 5);
+        assembler->machine_code[i].cmd |= NUM;
+
         return;
     }
 
@@ -241,17 +242,15 @@ void GetArg(ASM * assembler, int i)
                 printf("ERROR RAM ARG\n"
                        "LINE: %d\n"
                        "STR: %s\n", i + 1, assembler->machine_code[i].str);
-                //exit (RAM_ARG_ERROR);
             }
 
-            assembler->machine_code[i].cmd |= (1 << 7);
+            assembler->machine_code[i].cmd |= RAM;
         }
         else
         {
             printf("ERROR RAM ARG\n"
                    "LINE: %d\n"
                    "STR: %s\n", i + 1, assembler->machine_code[i].str);
-            //exit (RAM_ARG_ERROR);
         }
     }
     else if (GetValue(&assembler->machine_code[i], ram_status))
@@ -259,6 +258,7 @@ void GetArg(ASM * assembler, int i)
         if (*assembler->machine_code[i].str == 'J')
         {
             assembler->machine_code[i].arg = assembler->machine_code[(int)assembler->machine_code[i].arg].personal_ip;
+            assembler->machine_code[i].cmd |= NUM;
         }
     }
     else if (GetReg(&assembler->machine_code[i], ram_status)) {}
@@ -268,7 +268,6 @@ void GetArg(ASM * assembler, int i)
         printf("ERROR ARG\n"
                "LINE: %d\n"
                "STR: %s\n", i + 1, assembler->machine_code[i].str);
-        //exit (ARG_ERROR);
     }
 }
 
@@ -281,10 +280,12 @@ int GetLabel(ASM * assembler, int i)
         if (strcmp(assembler->lables[j].str, assembler->machine_code[i].str + assembler->machine_code[i].cmd_len + 1) == 0)
         {
             assembler->machine_code[i].arg = assembler->lables[j].ip;
+            assembler->machine_code[i].cmd |= NUM;
 
             return 1;
         }
     }
+
     return 0;
 }
 
@@ -301,7 +302,7 @@ int GetValue(CMD * machine_code, int ram_status)
         return 0;
     }
 
-    machine_code->cmd |= (1 << 5);
+    machine_code->cmd |= NUM;
 
     return 1;
 }
@@ -315,7 +316,7 @@ int GetReg(CMD * machine_code, int ram_status)
     if (*(check_ptr) == 'R' && *(check_ptr + 2) == 'X' && *(check_ptr + 1) - 'A' < 4)
     {
         machine_code->arg  = *(check_ptr + 1) - 'A' + 1;
-        machine_code->cmd |= (1 << 6);
+        machine_code->cmd |= REG;
 
         return *(check_ptr + 3 + ram_status) == '\0';
     }

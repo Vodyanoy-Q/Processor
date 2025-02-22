@@ -20,12 +20,12 @@ struct Stack
     size_t capacity = 0;
 };
 
-Stack * StackCtor(size_t capacity);
-StackType StackPop(Stack * stk);
-void StackChange(Stack * stk, STACK_CHANGE condition);
+int StackCtor(Stack ** stk, size_t capacity);
+int StackPop(Stack * stk, StackType * var);
+int StackChange(Stack * stk, STACK_CHANGE condition);
 int StackPush(Stack * stk, StackType value);
-void StackDump(Stack * stk);
-void StackDtor(Stack ** stk);
-void DataDump(Stack * stk);
+int StackDump(Stack * stk);
+int StackDtor(Stack ** stk);
+int DataDump(Stack * stk);
 
 #endif //_STACK_H_

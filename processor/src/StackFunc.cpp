@@ -3,59 +3,77 @@
 
 #include "../inc/Stack.h"
 #include "../inc/colors.h"
+#include "../inc/Proc.h"
 
-void DataDump(Stack * stk)
+int DataDump(Stack * stk)
 {
+    MY_ASSERT(stk, STK_ADDRESS_ERROR);
+
     for (unsigned int i = 0; i < stk->capacity; i++)
     {
         if (i < stk->size)
         {
             if (i == stk->size - 1)
             {
-                printf("%s%5lg %s", RED, stk->data[i], RESET_COLOR);
+                printf(RED "%5lg " RESET_COLOR, stk->data[i]);
                 continue;
             }
-            printf("%s%5lg %s", CYAN, stk->data[i], RESET_COLOR);
+            printf(CYAN "%5lg " RESET_COLOR, stk->data[i]);
         }
         else
         {
-            printf("%s%5lg %s", GREEN, stk->data[i], RESET_COLOR);
+            printf(GREEN "%5lg " RESET_COLOR, stk->data[i]);
         }
     }
+
+    return NO_ERROR;
 }
 
-Stack * StackCtor(size_t capacity)
+int StackCtor(Stack ** stk, size_t capacity)
 {
-    Stack * stk = (Stack*)calloc(1, sizeof(Stack));
-    MY_ASSERT(stk);
+    Stack * stack = (Stack*)calloc(1, sizeof(Stack));
+    MY_ASSERT(stk, ADDRESS_ERROR);
 
-    stk->size = 0;
-    stk->capacity = capacity;
+    stack->size = 0;
+    stack->capacity = capacity;
 
-    stk->data = (StackType*)calloc(stk->capacity, sizeof(StackType));
-    MY_ASSERT(stk);
+    stack->data = (StackType*)calloc(stack->capacity, sizeof(StackType));
+    MY_ASSERT(stack->data, ADDRESS_ERROR);
 
-    return stk;
+    *stk = stack;
+
+    return NO_ERROR;
 }
 
-void StackDtor(Stack ** stk)
+int StackDtor(Stack ** stk)
 {
+    MY_ASSERT(*stk, STK_ADDRESS_ERROR);
+
     (*stk)->size = 0;
     (*stk)->capacity = 0;
 
     free((*stk)->data);
+    (*stk)->data = NULL;
+
     free(*stk);
 
     *stk = NULL;
+
+    return NO_ERROR;
 }
 
 int StackPush(Stack * stk, StackType value)
 {
-    MY_ASSERT(stk);
+    MY_ASSERT(stk, STK_ADDRESS_ERROR);
 
     if (stk->size == stk->capacity)
     {
-        StackChange(stk, UP);
+        int err = StackChange(stk, UP);
+
+        if (err != 0)
+        {
+            return err;
+        }
     }
 
     stk->data[stk->size] = value;
@@ -65,33 +83,35 @@ int StackPush(Stack * stk, StackType value)
     return 0;
 }
 
-void StackDump(Stack * stk)
+int StackDump(Stack * stk)
 {
-    MY_ASSERT(stk);
+    MY_ASSERT(stk, STK_ADDRESS_ERROR);
 
-    printf("==================================================\n");
+    YELLOW_TEXT("==================================================\n");
 
     for (size_t i = 0; i < stk->capacity; i++)
     {
-        printf("%5lg ", stk->data[i]);
+        printf(YELLOW "%5lg " RESET_COLOR, stk->data[i]);
     }
 
-    printf("\n==================================================\n");
+    YELLOW_TEXT("\n==================================================\n");
+
+    return NO_ERROR;
 }
 
-StackType StackPop(Stack * stk)
+int StackPop(Stack * stk, StackType * var)
 {
-    MY_ASSERT(stk);
-
-    StackType var = 0;
+    MY_ASSERT(stk, STK_ADDRESS_ERROR);
+    MY_ASSERT(var, ADDRESS_ERROR);
 
     if (stk->size == 0)
     {
-        printf("There is no values in the Stack. Push values in the Stack and try again\n");
+        RED_TEXT("ERROR: STACK IS EMPTY.\n");
+        return POP_ERROR;
     }
     else
     {
-        var = stk->data[stk->size - 1];
+        *var = stk->data[stk->size - 1];
         stk->data[stk->size - 1] = 0;
 
         stk->size -= 1;
@@ -100,21 +120,21 @@ StackType StackPop(Stack * stk)
         {
             stk->capacity = 1;
 
-            StackChange(stk, DOWN);
+            return StackChange(stk, DOWN);
         }
 
         else if (stk->size > 0 && stk->capacity / 4 == stk->size)
         {
-            StackChange(stk, DOWN);
+            return StackChange(stk, DOWN);
         }
     }
 
-    return var;
+    return NO_ERROR;
 }
 
-void StackChange(Stack * stk, STACK_CHANGE condition)
+int StackChange(Stack * stk, STACK_CHANGE condition)
 {
-    MY_ASSERT(stk);
+    MY_ASSERT(stk, STK_ADDRESS_ERROR);
 
     switch (condition)
     {
@@ -123,7 +143,7 @@ void StackChange(Stack * stk, STACK_CHANGE condition)
             stk->capacity *= 2;
 
             stk->data = (StackType*)realloc(stk->data, stk->capacity * sizeof(StackType));
-            MY_ASSERT(stk->data);
+            MY_ASSERT(stk->data, ADDRESS_ERROR);
 
             break;
         }
@@ -140,17 +160,19 @@ void StackChange(Stack * stk, STACK_CHANGE condition)
             }
 
             stk->data = (StackType*)realloc(stk->data, stk->capacity * sizeof(StackType));
-            MY_ASSERT(stk->data);
+            MY_ASSERT(stk->data, ADDRESS_ERROR);
 
             break;
         }
 
         default:
         {
-            printf("ERROR STACK CHANGE VALUE\n");
-            exit(CHANGE_ERROR);
+            RED_TEXT("ERROR STACK CHANGE VALUE\n");
+            return CHANGE_ERROR;
 
             break;
         }
     }
+
+    return NO_ERROR;
 }

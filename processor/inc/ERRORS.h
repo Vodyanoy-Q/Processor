@@ -5,18 +5,18 @@ enum ERROR_CODE
 {
     NO_ERROR          = 0,
     ERROR             = 1,
-    CANARY_ERROR      = -2,
-    STK_ADDRES_ERROR  = -3,
-    DATA_ERROR        = -4,
-    DATA_CANARY_ERROR = -5,
-    HASH_ERROR        = -6,
-    CHANGE_ERROR      = -7,
-    ADDRES_ERROR      = -8,
-    FILE_ERROR        = -9,
-    OPEN_FILE_ERROR   = -10,
-    FILE_CLOSE_ERROR  = -11,
-    COMMAND_ERROR     = -12,
-    ERROR_PUSH_ARG    = -13
+    STK_ADDRESS_ERROR = -1,
+    ADDRESS_ERROR     = -2,
+    CHANGE_ERROR      = -3,
+    FILE_ERROR        = -4,
+    OPEN_FILE_ERROR   = -5,
+    CLOSE_FILE_ERROR  = -6,
+    COMMAND_ERROR     = -7,
+    ERROR_ARG         = -8,
+    POP_ERROR         = -9,
+    SPU_ADDRESS_ERROR = -10,
+    GET_SIZE_ERROR    = -11,
+    ERROR_READ_FROM_FILE = -12
 };
 
 #endif // _ERROR_H_
