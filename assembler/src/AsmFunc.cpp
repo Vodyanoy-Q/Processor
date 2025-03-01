@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
-#include <sys\stat.h>
+#include <sys/stat.h>
 #include "../inc/Asmh.h"
 
 void AsmCtor(ASM * assembler, char * In_name, char * Out_name)
@@ -120,6 +120,12 @@ int GetStrCount(char * buff)
 
             str_count++;
         }
+        else if (*buff == '\n')
+        {
+            *buff = '\0';
+
+            str_count++;
+        }
 
         buff++;
     }
@@ -159,7 +165,7 @@ void GetCodeStr(ASM * assembler)
 
         if (assembler->buff[j] == '\0')
         {
-            j += 2;
+            j += 1;
 
             continue;
         }
@@ -172,9 +178,9 @@ void GetCodeStr(ASM * assembler)
             assembler->machine_code[i].len_str = strlen(assembler->buff + j) - 1;
             assembler->machine_code[i].cmd = LABEL;
 
-            j += strlen((const char*)(assembler->buff + j)) + 2;
+            j += strlen((const char*)(assembler->buff + j)) + 1;
 
-            *(assembler->buff + j - 3) = '\0';
+            *(assembler->buff + j - 2) = '\0';
 
             assembler->lables[assembler->lable_count].str = assembler->machine_code[i].str;
             assembler->lables[assembler->lable_count].ip = ip;
@@ -201,7 +207,7 @@ void GetCodeStr(ASM * assembler)
             {
                 assembler->machine_code[i].len_str = k - j;
 
-                k += 2;
+                k += 1;
 
                 j = k;
 

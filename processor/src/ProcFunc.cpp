@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
-#include <sys\stat.h>
+#include <sys/stat.h>
 
 #include "../inc/Stack.h"
 #include "../inc/Proc.h"
@@ -32,7 +32,7 @@ int GetCode(SPU * spu)
     return NO_ERROR;
 }
 
-int GetFileSize(FILE * file, size_t * size)
+int GetFileSize(FILE * file, unsigned int * size)
 {
     struct stat st;
 

@@ -33,7 +33,7 @@ struct CMD
 };
 
 int GetCode(SPU * spu);
-int GetFileSize(FILE * file, size_t * size);
+int GetFileSize(FILE * file, unsigned int * size);
 int SPU_Ctor(SPU * spu, char * file_name);
 int GetArg(SPU * spu, double ** arg);
 int SPU_Dtor(SPU * spu);
